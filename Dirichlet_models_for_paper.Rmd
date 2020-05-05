@@ -1,0 +1,537 @@
+---
+title: "Soil_C_Distribution_for_paper"
+author: "Becca"
+date: "3/12/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Intro
+
+
+The purpose of this file is to remake the soil C distribution plots and statistics using the master data frame rather than the individual frames used in Dirichlet_distributions.
+
+
+Load packages
+```{r }
+library(tidyverse)
+library(tidyr)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(FlexDir)
+library(DirichletReg)
+library(AICcmodavg)
+library(ape)
+```
+
+
+Load data
+```{r }
+hhout <- read.csv("hhout_master_01May2020.csv", header=TRUE)
+hhout$depth <- as.factor(hhout$depth)
+bayesdf <- read.csv("bayesdf.csv", header=TRUE)
+summary(hhout)
+summary(bayesdf)
+
+#this comparison isn't working, but if you look at the summaries they're equal.
+#all.equal(hhout[hhout$fractionated=="y", ]$org.c.fraction.mass, bayesdf$org.c.fraction.mass) 
+```
+
+
+Subset out the organic and inorganic fraction masses
+```{ r }
+#subset organic c fraction masses
+sub.org<-select(hhout, c(site, species, depth, fraction.code, org.c.fraction.mass))
+summary(sub.org)
+sub.org <- sub.org[complete.cases(sub.org), ]
+summary(sub.org)
+
+sub.org.wide<-spread(sub.org, fraction.code, org.c.fraction.mass)
+names(sub.org.wide) <- c("site","species", "depth", "org.pom", "org.sa", "org.sc")
+summary(sub.org.wide)
+
+#subset inorganic c fraction masses
+sub.inorg <- select(hhout, c(site, species,depth, fraction.code, inorg.c.mass.frac))
+summary(sub.inorg)
+sub.inorg <- sub.inorg[complete.cases(sub.inorg), ]
+summary(sub.inorg)
+
+sub.inorg.wide <- spread(sub.inorg, fraction.code, inorg.c.mass.frac)
+names(sub.inorg.wide) <- c("site","species", "depth", "inorg.pom", "inorg.sa", "inorg.sc")
+summary(sub.inorg.wide)
+```
+
+
+Turn the masses into normalized Dirichlet distributions
+```{ r }
+#organic
+sub.org.wide <- na.omit(sub.org.wide)
+org.diri <- FD.normalization(sub.org.wide[,4:6]) 
+head(org.diri)  
+sub.org.wide <- cbind(sub.org.wide, org.diri)
+
+
+#inorganic
+sub.inorg.wide <- na.omit(sub.inorg.wide)
+inorg.diri <- FD.normalization(sub.inorg.wide[,4:6])
+head(inorg.diri)
+sub.inorg.wide <- cbind(sub.inorg.wide, inorg.diri)
+```
+
+
+Subset the master data frame
+```{ r}
+#first get just the rows from the fraction data
+hhout_sub <- hhout[hhout$fractionated=="y", ] 
+
+#now pull out just the fraction.code, org.c.bulk.wt, site, species, depth, pct.mass.loss, soil.start.wt, weight.g, orgc.weight, totwt, org.c.start.mass, org.c.fraction.mass, inorg.c.mass.frac, inorg.c.mass.bulk
+hhout_sub <- hhout_sub %>% select("fraction.code", "org.c.start.mass.bulk", "site", "species", "depth", "pct.mass.loss.fraction", "pct.mass.loss.bulk", "soil.mass.pre.fract", "fraction.mass", "org.c.mass.fraction", "sum.org.c.mass.fraction", "inorg.c.mass.frac", "inorg.c.mass.bulk")
+
+
+#spread the bulk C, pct.n.pre.ashing, pct.n.post.ashing, pct.mass.loss, c.in.org.fract, org.c.in.t.fract, org.n.in.t.frac, weight.g, orgc.weight, pct.c.cont.by.fraction, org.c.fraction.mass, inorg.c.mass.frac variables over values of fraction.code
+hhout_sub_wide <- spread(hhout_sub, fraction.code, org.c.start.mass.bulk)
+summary(hhout_sub_wide)
+
+#rename one of the fractions with the org.c.bulk.wt
+hhout_sub_wide <- rename(hhout_sub_wide, replace = c("pom" = "org.c.start.mass.bulk"))
+summary(hhout_sub_wide)
+
+#omit the last two columns
+hhout_sub_wide_drop <- hhout_sub_wide[ , -c(13, 14)]
+summary(hhout_sub_wide_drop)
+
+#drop the nas
+hhout_sub_wide_complete <- na.omit(hhout_sub_wide_drop)
+summary(hhout_sub_wide_complete)
+```
+
+
+Paste the data back into the dirichlet master dataframe
+```{ r }
+diri_df <- join(hhout_sub_wide_complete, sub.org.wide[ ,c(1:3, 7:9)], type="left")
+diri_df <- join(diri_df, sub.inorg.wide[ ,c(1:3, 7:9)], type="left")
+
+summary(diri_df)
+```
+
+
+Write the new dataframes so we don't have to keep redoing the above steps.
+```{ r }
+write.csv(diri_df, file = "diri_df.csv", row.names = FALSE)
+write.csv(hhout_sub_wide_complete, file = "hhout_sub_wide_complete.csv", row.names = FALSE)
+write.csv(hhout_sub_wide, file = "hhout_sub_wide.csv", row.names = FALSE)
+write.csv(sub.org.wide, file = "sub.org.wide.csv", row.names = FALSE)
+```
+
+
+The soil npoc data is on a different scale from the other variables (mg.L vs g/g). Redo to make the scale the same as the other variables (g/dry mass)
+```{ r }
+# (mg/L * volume of extract (L))/dw soil in extract
+hhout$npoc.mg.g <- (hhout$soil.npoc.mg.L * 0.04) / 5
+summary(hhout$npoc.mg.g)
+
+#change mg.g to g to match other soc numbers
+hhout$soil.doc.mass.g <- hhout$npoc.mg.g/1000
+summary(hhout$soil.doc.mass.g)
+
+# check whether this correlates with anything else
+soil.doc.lm <- lm(npoc.mg.g ~ soil.ph + litter.pct.c + sum.org.c.mass.fraction, data=hhout)
+summary(soil.doc.lm)
+
+write.csv(hhout, file = "hhout_master", row.names = FALSE)
+```
+
+So DOC increases along with soil pH, and decreases with sum organic c mass fraction (makes sense, since more DOC would mean less C in the solid fractions and vice-versa). 
+
+
+Run a dirichlet model for the organic C per solid fraction
+```{r}
+#subset the organic fraction values for the dirichlet model
+sub.org.wide <- read.csv("sub.org.wide.csv", header = TRUE)
+sub.org.wide$depth = as.factor(sub.org.wide$depth)
+
+npoc.for.join <- hhout[,c("site", "species", "depth", "soil.doc.mass.g")]
+sub.org.wide <- join(sub.org.wide, npoc.for.join, type="left")
+
+litter.for.join <- hhout[,c("site", "species", "depth", "litter.pct.c", "litter.pct.n", "litter.lignin.mg.g")]
+sub.org.wide <- join(sub.org.wide, litter.for.join, type="left")
+
+sub.org.wide %>% distinct() -> sub.org.wide
+
+summary(sub.org.wide)
+
+orgs <- DR_data(sub.org.wide[,c(7:10)])
+
+#make a model with species and depth as predictors
+mod2 <- DirichReg(orgs ~ species + depth, data = sub.org.wide, model = "alternative")
+
+#use litter chemistry instead of species as a predictor
+mod3 <- DirichReg(orgs ~ litter.pct.c + litter.pct.n + depth, data = sub.org.wide)
+mod4 <- DirichReg(orgs ~ litter.pct.c + depth, data = sub.org.wide)
+mod5 <- DirichReg(orgs ~litter.lignin.mg.g + depth, data = sub.org.wide)
+
+#run the model summaries
+#summary(mod1)
+summary(mod2)
+summary(mod3)
+summary(mod4)
+summary(mod5)
+
+#compare AICs
+#AIC(mod1)
+AIC(mod2)
+AIC(mod3)
+AIC(mod4)
+AIC(mod5)
+#model 2 is the best, species + depth
+
+```
+
+
+
+## Plot the organic C distributions (solid fractions) by species at depths 1 and 2
+
+First depth 1
+```{ r }
+org.wide.1<-subset(sub.org.wide, depth==1)
+
+orgs1 <- DR_data(org.wide.1[,7:9])
+
+rangens <- function(sp.name, depth="1", n= 1000){
+            alphas <-matrix(predict(mod2, alpha=TRUE)$alpha[org.wide.1$species==sp.name &
+                            org.wide.1$depth==depth,], ncol=3)[1,]
+            rands <- rdirichlet(n, alphas)
+            return(rands)
+}
+
+#apply the random generation to each level of the 'species' variable
+a <- lapply(levels(org.wide.1$species), rangens)
+names(a) <- levels(org.wide.1$species)
+summary(a)
+###to apply to the variable 'fraxinus', specify length as 5, do the following:
+#rangens("fraxinus", n = 5)
+###
+library(car)
+library(RColorBrewer)
+mycols<-brewer.pal(n=6, name="Accent")
+mycols2<-adjustcolor(mycols, alpha.f=0.1)
+mycols3<-brewer.pal(n=6, name="Dark2")
+
+
+plot.new()
+plot(orgs1,  reset_par = FALSE, type="n")
+lines(dataEllipse(toTernary(DR_data(a[[1]])), draw=FALSE)$`0.95`,col=mycols3[[1]])
+lines(dataEllipse(toTernary(DR_data(a[[2]])), draw=FALSE)$`0.95`,col=mycols3[[2]])
+lines(dataEllipse(toTernary(DR_data(a[[3]])), draw=FALSE)$`0.95`,col=mycols3[[3]])
+lines(dataEllipse(toTernary(DR_data(a[[4]])), draw=FALSE)$`0.95`,col=mycols3[[4]])
+lines(dataEllipse(toTernary(DR_data(a[[5]])), draw=FALSE)$`0.95`,col=mycols3[[5]])
+lines(dataEllipse(toTernary(DR_data(a[[6]])), draw=FALSE)$`0.95`,col=mycols3[[6]])
+#1=Acer, 2=fagus, 3=fraxinus, 4=picea, 5=populus, 6=quercus
+```
+
+
+Do the same for depth 2
+```{r }
+org.wide.2<-subset(sub.org.wide, depth==2)
+
+orgs2 <- DR_data(org.wide.2[,7:9])
+
+rangens2 <- function(sp.name, depth="2", n= 1000){
+            alphas <-matrix(predict(mod2, alpha=TRUE)$alpha[org.wide.2$species==sp.name &
+                            org.wide.2$depth==depth,], ncol=3)[1,]
+            rands <- rdirichlet(n, alphas)
+            return(rands)
+}
+
+#apply the random generation to each level of the 'species' variable
+b <- lapply(levels(org.wide.2$species), rangens2)
+names(b) <- levels(org.wide.2$species)
+summary(b)
+df.b <- as.data.frame(b)
+summary(df.b)
+###to apply to the variable 'fraxinus', specify length as 5, do the following:
+#rangens("fraxinus", n = 5)
+###
+
+plot.new()
+plot(orgs2,  reset_par = FALSE, type="n")
+lines(dataEllipse(toTernary(DR_data(b[[1]])), draw=FALSE)$`0.95`,col=mycols3[[1]])
+lines(dataEllipse(toTernary(DR_data(b[[2]])), draw=FALSE)$`0.95`,col=mycols3[[2]])
+lines(dataEllipse(toTernary(DR_data(b[[3]])), draw=FALSE)$`0.95`,col=mycols3[[3]])
+lines(dataEllipse(toTernary(DR_data(b[[4]])), draw=FALSE)$`0.95`,col=mycols3[[4]])
+lines(dataEllipse(toTernary(DR_data(b[[5]])), draw=FALSE)$`0.95`,col=mycols3[[5]])
+lines(dataEllipse(toTernary(DR_data(b[[6]])), draw=FALSE)$`0.95`,col=mycols3[[6]])
+#1=Acer, 2=fagus, 3=fraxinus, 4=picea, 5=populus, 6=quercus
+```
+
+
+Try redoing these ternary plots with ggtern
+```{r }
+library(ggtern)
+
+#depth 1
+ggtern(data=org.wide.1, aes(org.pom.1, org.sc.1, org.sa.1)) + theme_showarrows() + geom_point(aes(color=species)) + theme_dark()
+
+#depth 2
+ggtern(data=org.wide.2, aes(org.pom.1, org.sc.1, org.sa.1)) + theme_showarrows() + geom_point(aes(color=species)) 
+```
+
+Okay, I'm done with this, I don't think the ternary plots are interesting or helpful.
+
+## Make some more models 
+
+First prepare the data frame
+```{r }
+#read in the hhout_sub_wide_complete dataframe
+hhout_sub_wide_complete <- read.csv("hhout_sub_wide_complete.csv", header = TRUE)
+hhout_sub_wide_complete$depth <- as.factor(hhout_sub_wide_complete)
+
+#check names of the columns
+names(sub.org.wide)
+names(hhout_sub_wide_complete)
+
+#subset litter chemistry and npoc data from the complete hhout data frame
+litter.dat <- hhout[hhout$fractionated=="y", c(1,2,14,42:46,50)] 
+summary(litter.dat)
+
+
+#join the litter and npoc data to the diri data
+sub.org.litter <- join(sub.org.wide, litter.dat, type = "full")
+
+#make the lignin:n ratio variable
+sub.org.litter$lnratio <- (sub.org.litter$litter.lignin.mg.g/10)/sub.org.litter$litter.pct.n
+summary(sub.org.litter$lnratio)
+
+#make the soil pom:sc ratio
+sub.org.litter$pom.sc.ratio <- sub.org.litter$org.pom/sub.org.litter$org.sc
+summary(sub.org.litter$pom.sc.ratio)
+
+
+#add the litter hwec.mg.g to the dataframe from the hh_cue dataframe
+hh_cue <- read.csv("hh_cue.csv", header = TRUE)
+sub.for.join <- hh_cue[,c(1,14,55)]
+sub.org.litter <- join(sub.org.litter, sub.for.join, type = "left")
+
+summary(sub.org.litter)
+```
+ 
+ 
+Plot lnratio and hwe-c by species
+```{r }
+sub.org.litter$species <- with(sub.org.litter, reorder(species, lnratio, mean))
+  
+(ln.species <- ggplot(sub.org.litter, aes(x=species, y=lnratio)) +
+   geom_point()) +
+   theme_bw()
+
+sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.hwec.mg.g, mean))
+
+(hwec.species <- ggplot(sub.org.litter, aes(x=species, y=litter.hwec.mg.g)) +
+    geom_point()) +
+    theme_bw()
+
+sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.pct.c, mean))
+
+(pctc.species <- ggplot(sub.org.litter, aes(x=species, y=litter.pct.c)) +
+    geom_point()) +
+    theme_bw()
+```
+
+
+Look at the relationship between litter chemistry, depth, and distribution of soil organic c
+```{r}
+#remake the orgs data using the sub.org.wide data frame
+orgs <- FD.normalization(na.omit(sub.org.litter[ ,c(4:6,10)]))
+orgs <- DR_data(orgs)
+```
+
+
+check for autocorrelation
+```{ r}
+#install.packages("GGally")
+library(GGally)
+
+#correlation matrix
+ggpairs(sub.org.litter[,c(2, 3, 7:14)])
+
+#values that shouldn't go into the same model: 
+#  litter ln ratio and lignin, litter pct c, litter pct n, litter lignin mg, litter cell mg, litter hwe c ppm, 
+#  litter pct c and lignin, hwec, and lnratio
+#  litter hwec ppm and litter ln ratio (corr -0.98)
+```
+
+
+#make some candidate models
+```{r }
+random <- DirichReg(orgs ~ 1, data=na.omit(sub.org.litter)) 
+sp <- DirichReg(orgs ~ species, data=na.omit(sub.org.litter)) 
+depth <- DirichReg(orgs ~ depth, data=na.omit(sub.org.litter)) 
+lnratio <- DirichReg(orgs ~ lnratio, data=na.omit(sub.org.litter)) 
+site <- DirichReg(orgs ~ site, data=na.omit(sub.org.litter)) 
+hwec <- DirichReg(orgs ~ litter.hwec.mg.g, data=na.omit(sub.org.litter)) 
+pct.c <- DirichReg(orgs ~ litter.pct.c, data=na.omit(sub.org.litter))
+#AICtab doesn't work yet for this model class. 
+# Cand.set <- list(random, sp, depth, lnratio, site, npoc, hwec)
+# Cand.names <- c("random", "sp", "depth", "lnratio", "site", "npoc", "hwec")
+# aictab(Cand.set, modnames = Cand.names)
+
+#do by hand
+random.aic <- AIC(random)
+sp.aic <- AIC(sp)
+depth.aic <- AIC(depth)
+lnratio.aic <- AIC(lnratio)
+site.aic <- AIC(site)
+hwec.aic <- AIC(hwec)
+pct.c <- AIC(pct.c)
+
+#make into a table
+modname <- c("random", "sp", "depth", "lnratio", "site", "hwec", "pct.c")
+AIC <- c(random.aic, sp.aic, depth.aic, lnratio.aic, site.aic, hwec.aic, pct.c)
+
+#Diri AIC table
+diriAIC <- as.data.frame(cbind(modname, AIC))
+diriAIC$AIC <- as.numeric(as.character(diriAIC$AIC))
+is.numeric(diriAIC$AIC)
+is.factor(diriAIC$modname)
+diriAIC$modname <- with(diriAIC, reorder(modname, AIC, median))
+
+diriAIC
+#depth and site are the most important, but of course site would be because every site has a unique carbon distribution. No variables do worse than random (although hwec is close). 
+#Species is the next best predictor, even better than litte characteristics. 
+```
+
+
+Make some more complex models
+
+  * values that shouldn't go into the same model: 
+    - litter ln ratio and lignin, litter pct c, litter pct n, litter lignin mg, litter cell mg, litter hwe c ppm, 
+    - litter pct c and lignin, hwec, and lnratio
+    - litter hwec ppm and litter ln ratio (corr -0.98)
+
+Use depth and site as random variables, because they introduce spatial variation but for structural reasons. 
+
+Try a pcoa
+```{r }
+library(vegan)
+
+#transform compositional data
+##first put the non-normalized organic masses back into the dataframe
+pcoa_df <- join(hhout_sub_wide_complete, sub.org.wide[ ,c(1:6,10)], type="left")
+summary(pcoa_df)
+pcoa_df$depth = as.factor(pcoa_df$depth)
+
+#add the soil hwec mg g 
+hwec.for.join <- litter.dat[,c("site", "species", "depth", "soil.doc.mass.g")]
+pcoa_df <- join(pcoa_df, npoc.for.join, type="left")
+summary(pcoa_df)
+
+pcoa_sub <- pcoa_df[ ,c(13:16)]
+  
+##next get the distance matrix using vegdist
+#NEED TO ADD NPOC TO THIS
+soil.D<-vegdist(pcoa_sub, "bray")
+
+#do the pcoa
+soilpcoa <- pcoa(soil.D, correction = "cailliez")
+#soilpcoa
+
+#plot the pcoa
+biplot(soilpcoa)
+```
+
+The PCoA suffered from the horseshoe effect.
+
+Try an NMDS with envfit()
+```{r }
+#check the stress vs. dimension plot
+NMDS.scree <- function(x) { #where x is the name of the data frame variable
+  plot(rep(1, 10), replicate(10, metaMDS(x, autotransform = F, k = 1)$stress), xlim = c(1, 10),ylim = c(0, 0.30), xlab = "# of Dimensions", ylab = "Stress", main = "NMDS stress plot")
+  for (i in 1:10) {
+    points(rep(i + 1,10),replicate(10, metaMDS(x, autotransform = F, k = i + 1)$stress))
+  }
+}
+
+NMDS.scree(soil.D)
+#2 or 3 seems to be the inflection point, do the NMDS with 3 dimensions
+
+#run the NMDS
+# NMDS1 <- metaMDS(soil.D, k = 2, trymax = 100, trace = F)
+# NMDS1
+#not working because didn't include species names try again with species
+
+#get the data frame
+pcoa_env_df <- join(pcoa_df, sub.org.litter, type="left")
+
+#do the nmds
+NMDS2 <- metaMDS(pcoa_env_df[,c(14, 15, 16)], k = 2, trymax = 100, trace = F, autotransform = FALSE, distance = "bray")
+NMDS2
+
+plot(NMDS2)
+text(NMDS2, display="species")
+
+ordiplot(NMDS2)
+orditorp(NMDS2, display="species")
+
+#add the envfit
+ef <- envfit(NMDS2, pcoa_env_df[ ,c(2, 3, 18, 19, 21, 22, 23)], permu=999)
+ef
+
+#plot the envfit
+plot(NMDS2, type="t")
+plot(ef, p.max = 0.05)
+```
+
+
+Does soil npoc vary by litter chemistry?
+```{r }
+pcoa.npoc<-hhout[hhout$fractionated=="y", c("site", "species", "depth", "")]
+pcoa.npoc
+pcoa_env_df <- join(pcoa_env_df, pcoa.npoc, type = "left")
+
+npocmod <- lm(npoc.mg.L ~ litter.pct.c, data = pcoa_env_df) 
+npocmod2 <- lm(npoc.mg.L ~ litter.lignin.mg.g, data = pcoa_env_df)
+
+summary(npocmod)
+summary(npocmod2)
+```
+
+
+Okay, so npoc does vary with litter chemistry. Try adding the hwec.mg.g to the envfit
+```{r }
+
+# do the nmds
+# no convergent solutions with k=3, reduce to 2 dimensions
+NMDS3 <- metaMDS(pcoa_env_df[,c(14, 15, 16, 22)], k = 2, trymax = 100, trace = F, autotransform = FALSE, distance = "bray")
+NMDS3
+
+plot(NMDS3)
+text(NMDS3, display="species")
+
+ordiplot(NMDS3)
+orditorp(NMDS3, display="species")
+
+#add the envfit - choose variables more selectively:
+#  * depth
+#  * lnratio
+#  * species  - just for display purposes
+  
+ef <- envfit(NMDS3, pcoa_env_df[ ,c(2, 3, 19, 23)], permu=999)
+ef
+
+#plot the envfit
+plot(NMDS3, type="t")
+plot(ef, p.max = 0.05)
+```
+
+
+
+
+
+
+

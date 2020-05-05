@@ -1,0 +1,83 @@
+---
+title: "Litter"
+author: "Becca"
+date: "3/6/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+load libraries
+```{r }
+library(tidyverse)
+```
+
+
+load data frames to combine
+```{r }
+#litter carbon (total, lignin, cellulose) and litter nitrogen (pct.n)
+litter_cn <- read.csv2("Data/litter/litter_cn.csv", header=TRUE, dec = ".", colClasses = c("integer", "factor", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"))
+summary(litter_cn)
+
+#litter hwe-c 
+litter_hwe_c <- read.csv("Data/litter/litter_hweC_ppm.csv", header=TRUE)
+summary(litter_hwe_c)
+```
+
+
+Summarize hwe_c by taking the mean of the corrected_for_dilution ppmc by species
+```{r }
+hwe_c_summary <- litter_hwe_c%>% 
+  group_by(species)%>%
+  summarise(n=length(corrected_for_dilution), 
+            mean_hwec_ppm = mean(corrected_for_dilution))
+
+hwe_c_summary
+
+#rename the levels of species to match the litter_cn data
+hwe_c_summary$species <- recode(hwe_c_summary$species, Acer='acer', Fagus='fagus', Fraxinus='fraxinus', Picea='picea', Populus='populus', Quercus='quercus')
+
+hwe_c_summary
+```
+
+
+Summarize litter_cn by taking the mean pct.n, pct.c, lignin.mg.g, and cell.mg.g by species
+```{r }
+litter_cn_summary <- litter_cn%>%
+  group_by(species)%>%
+  summarise(n=length(pct.n), 
+            pct.n = mean(pct.n), 
+            pct.c = mean(pct.c),
+            lignin.mg.g = mean(lignin.mg.g),
+            cell.mg.g = mean(cell.mg.g))
+litter_cn_summary
+
+#remove the standards for adding together
+litter_cn_summary <- litter_cn_summary[1:6, ]
+
+litter_cn_summary
+```
+
+
+Do a full join 
+```{r }
+litter_chemistry <- full_join(litter_cn_summary, hwe_c_summary)
+
+#note: it's giving me a warning that it's joining species with different levels so coercing to a factor, but as far as I can tell the levels are the same. So I'll just turn species back into a factor.
+litter_chemistry$species <- as.factor(litter_chemistry$species)
+
+
+litter_chemistry
+```
+
+
+Save the data frame to the litter folder and to the soil_fractionation folder.
+```{r }
+write.csv(litter_chemistry, file="C:/Users/rbs335/Desktop/Files/Research/HollandseHout_Project/HH_R/Data/litter/litter_chem.csv", row.names = FALSE)
+```
+

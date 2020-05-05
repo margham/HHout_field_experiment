@@ -1,0 +1,115 @@
+---
+title: "bayes_and_z_scores_df_build"
+author: "Becca"
+date: "10-7-2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+Libraries and data
+```{r }
+library(tidyverse)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+```
+
+
+data
+```{r }
+cn.wts.sums2 <- read.csv("cn.wts.sums2.csv", header=TRUE)
+summary(cn.wts.sums2)
+```
+
+
+##Making z-scores for Bayesian response model
+
+Subset relevant values from the cn.wts.sums2 dataframe.
+```{r }
+c.bayes.model.df <- select(
+  cn.wts.sums2, c(site, species, depth, fraction.code, pct.mass.loss, soil.start.wt, weight.g, orgc.weight, totwt, org.c.start.mass, org.c.fraction.mass, org.c.bulk.wt, inorg.c.mass.frac, inorg.c.mass.bulk))
+
+summary(c.bayes.model.df)
+```
+
+
+Look at shape of variables
+```{r }
+#organic C masses by fraction
+hist(c.bayes.model.df$org.c.fraction.mass)
+g4 <- ggplot(c.bayes.model.df, aes(org.c.fraction.mass))
+g4 + geom_density(aes(x=org.c.fraction.mass, fill=fraction.code)) + 
+     stat_function(fun=dbeta, args=list(shape1=0.5, shape2=3, log=FALSE))
+     #stat_function(fun=dgamma, args=list(shape=0.75, rate=6.5), color="red") #+
+     #facet_wrap(~fraction.code)
+#organic C shows a negative exponential distribution when grouped, but when separated into fractions pom shows nexp dist from 0 to 0.4g, sa shows narrow right-skewed sit of 0 to 0.2g, and sc shows normal dist with range of 0 to 0.55g with mean of 0.25g.
+
+#inorganic C masses by fraction
+hist(c.bayes.model.df$inorg.c.mass.frac)
+g4 <- ggplot(c.bayes.model.df, aes(inorg.c.mass.frac))
+g4 + geom_histogram(aes(x=inorg.c.mass.frac)) + 
+     stat_function(fun=dgamma, args=list(shape=0.25, rate=2.5, log=FALSE)) #+
+     #facet_wrap(~fraction.code)
+#inorganic C shows a negative exponential distribution when grouped, but when separated into fractions pom shows mostly 0g, sa shows average of 0.01g, and sc shows range of 0 to 0.65g
+
+#inorg c mass bulk
+hist(c.bayes.model.df$inorg.c.mass.bulk)
+g4 <- ggplot(c.bayes.model.df, aes(inorg.c.mass.bulk))
+g4 + geom_histogram(aes(x=inorg.c.mass.bulk)) + 
+     stat_function(fun=dnorm, args=list(mean=0.08, sd=0.02, log=FALSE))
+
+#org c mass bulk
+hist(c.bayes.model.df$org.c.bulk.wt)
+g4 <- ggplot(c.bayes.model.df, aes(org.c.bulk.wt))
+g4 + geom_density(aes(x=org.c.bulk.wt, fill=species)) #+ 
+     #stat_function(fun=dgamma, args=list(shape=0.5, rate=5, log=FALSE))
+#no idea how to model this distribution.
+```
+
+
+Normalize the repsonse data (set mean of 0 and sd of 1)
+```{r}
+z_c.bayes.model.df.scores <- as.data.frame(scale(c.bayes.model.df[5:14],))
+summary(z_c.bayes.model.df.scores)
+
+c.bayes.model.meta <- c.bayes.model.df[1:4]
+summary(c.bayes.model.meta)
+
+z_c.bayes.model.df <- cbind(z_c.bayes.model.df.scores, c.bayes.model.meta)
+summary(z_c.bayes.model.df)
+
+names(z_c.bayes.model.df) <- c("z.pct.mass.loss", "z.soil.start.wt", "z.weight.g", "z.orgc.weight", "z.totwt", "z.org.c.start.mass", "z.org.c.fraction.mass", "z.org.c.bulk.wt", "z.inorg.c.mass.frac", "z.inorg.c.mass.bulk", "site","species", "depth", "fraction.code") 
+```
+
+
+Look at shape of variables
+```{r }
+zcb <- z_c.bayes.model.df
+summary(zcb)
+
+hist(zcb$z.org.c.start.mass)
+#organic C starting mass is somewhat left-skewed but with a large right tail.
+
+hist(zcb$z.org.c.fraction.mass)
+#org c per fraction - gamma distribution with long right tail. 
+
+hist(zcb$z.inorg.c.mass.bulk)
+#normal distribution but with more mass on left.
+
+hist(zcb$z.inorg.c.mass.frac)
+#negative exponential distribution - can recreate with a gamma function:
+g4 <- ggplot(zcb, aes(z.inorg.c.mass.frac))
+g4 + geom_density(aes(x=z.inorg.c.mass.frac), color="red") + 
+     stat_function(fun=dgamma, args=list(shape=5, rate=3.5, log=FALSE))
+
+```
+
+
+Join the zcb and c.bayes.model dataframes.
+```{r }
+bayesdf <- join(zcb, c.bayes.model.df, type="left")
+summary(bayesdf)
+
+write.csv(bayesdf, file="bayesdf.csv")
+```

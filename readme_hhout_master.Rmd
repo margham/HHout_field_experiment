@@ -1,0 +1,65 @@
+---
+title: "Database_notes"
+author: "Becca"
+date: "3/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Database notes
+
+The purpose of this document is to explain what each of the variables in the master dataframe () represents.
+
+The master dataframe is 'hhout_master_17Mar2020.csv'. This dataframe contains information on relevant soil and litter parameters for six taxa at the Hollandse Hout field site.
+
+The variables in the dataframe are as follows:
+
+1.  **site** is a factor that specifies the location of the site in the Hollandse Hout tree plantation
+2.  **depth** is a factor referring to the depth of the sample within the soil profile. 1 = 0-5cm; 2 = 5-15cm; 3 = 15-25cm; 4 = 25-40cm
+3.  **fraction.name** is a factor referring to the name of the (solid) fraction in the sample. Intended as a label.
+4.  **fraction.code** is a factor referring to the name of the (solid) fraction in the sample. Refers to the same fraction name as above. Intended to be used in analysis.
+5.  **pct.n.pre.ashing.fraction** is the percent nitrogen in the specified fraction.
+6.  **pct.c.pre.ashing.fraction** is the percent carbon in the specified fraction.
+7.  **pct.n.post.ashing.fraction** is the percent nitrogen in the specified fraction following combustion at 550oC.
+8.  **pct.c.post.ashing.fraction** is the percent carbon in the specified fraction following combustion at 550oC.
+9.  **pct.mass.loss.fraction** is the difference between the starting weight and final weight (following combustion) of the specified fraction.
+10. **pct.c.in.org.fraction** is the percent carbon in the organic portion of the soil fraction.
+11. **pct.c.in.whole.fraction** is the percent carbon in the total soil fraction.
+12. **pct.n.in.org.fraction** is the percent nitrogen in the organic portion of the soil fraction.
+13. **pct.n.in.whole.fraction** is the percent nitrogen in the total soil fraction. 
+14. **species** is the genus of the dominant tree species in the plot where the soil was collected and the genus of the leaves collected for litter chemistry analysis.
+15. **pct.c.pre.ashing.bulk** is the percent carbon in the bulk soil sample before combustion.
+16. **pct.n.pre.ashing.bulk** is the percent nitrogen in the bulk soil sample before combustion.
+17. **pct.c.post.ashing.bulk** is the percent carbon in the bulk soil sample after combustion.
+18. **pct.n.post.ashing.bulk** is the percent nitrogen in the bulk soil sample after combustion.
+19. **pct.mass.loss.bulk** is the average mass loss from the bulk soil sample during combustion.
+20. **pct.c.in.org.fraction.bulk** is the percent carbon in the organic fraction of the bulk sample.
+21. **pct.org.c.in.whole.bulk** is the total percent organic carbon in the bulk sample.
+22. **pct.n.in.org.fraction.bulk** is the percent nitrogen in the organic fraction of the bulk sample.
+23. **pct.org.n.in.whole.bulk** is the total percent nitrogen in the total bulk sample.
+24. **soil.mass.pre.fract** is the starting weight (grams dry weight) of the soil sample used for fractionation.
+25. **fraction.mass** is the weight of the individual fractions (grams dry weight) of the individual soil fractions.
+26. **org.c.mass.fraction** is the weight (grams dry weight) of the organic carbon in the fraction.
+27. **pct.c.in.fraction** is the percent of the org.c.fraction.mass.sum contained by that fraction.
+28. **org.c.start.mass.bulk** is the mass of organic carbon in the total soil sample.
+29. **org.c.mass.fraction** is the mass of the organic carbon in the fraction.
+30. **soil.mass.sum.fractions** is the sum of each individual fraction mass, use this to compare with the soil.mass.pre.fract to see how much mass was lost (or gained) during fractionation.
+31. **sum.org.c.mass.fractions** is the sum-of-fractions mass of organic carbon in the soil sample, compare this with the org.c.start.mass.
+32. **inorg.c.mass.frac** the mass (g dry weight) of the inorganic carbon within the soil fraction.
+33. **inorg.c.mass.bulk** the mass(g dry weight) of the inorganic carbon within the bulk soil sample.
+34. **org.c.mass.bulk** the mass (g dry weight) of the organic carbon within the bulk soil sample
+35. **lon** the longitude of the sampling site.
+36. **lat** the latitude of the sampling site.
+37. **soil.ph** the average pH, measured from the supernatant of the soil during NO3 and NH4 extraction, of the bulk soil sample.
+38. **bulk.dens** the average bulk density of the bulk soil sample.
+39. **pct.m** the percent moisture of the bulk soil sample.
+40. **litter.pct.n** the percent nitrogen of the leaf litter for each tree species in the study. Litter collected from the Hollandse Hout field site.
+41. **litter.pct.c** the percent carbon of the leaf litter for each tree species in the study. Litter collected from the Hollandse Hout field site.
+42. **litter.lignin.mg.g** the leaf lignin content (milligrams/gram) for each tree species in the study. Litter collected from the Hollandse Hout field site. 
+43. **litter.cell.mg.g** the leaf cellulose content (milligrams/gram) for each tree litter in the study. Litter collected from the Hollandse Hout field site.
+44. **litter.hwec.ppm** the hot-water-extractable carbon (ppm) for each tree species in the study. Litter collected from the Hollandse Hout field site.
+45. **soil.npoc.mg.L** the non-purgeable organic carbon content of the DOC fraction of the soil.
+46. **fractionated** a factor denoting whether the data in the row includes fractionated soil data or not. Depths 1 and 2 should all be 'yes' (except for samples ), depths 3 and 4 should all be 'no'.

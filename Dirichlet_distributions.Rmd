@@ -1,0 +1,428 @@
+---
+title: "Dirichlet_distribution"
+author: "Becca"
+date: "22-5-2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+# Model generation
+
+```{r }
+library(tidyverse)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(FlexDir)
+library(tidyr)
+```
+
+
+Make the fraction data into Dirichlet distributions.
+
+load the bayesdf dataframe
+```{r }
+bayesdf <- read.csv("bayesdf.csv", header=TRUE)
+```
+
+First, subset the organic and inorganic fraction masses
+```{r}
+#subset organic c fraction masses
+bayes.sub.org<-select(bayesdf, c(site,species, depth, fraction.code, org.c.fraction.mass))
+bso.wide<-spread(bayes.sub.org, fraction.code, org.c.fraction.mass)
+names(bso.wide) <- c("site","species", "depth", "org.pom", "org.sa", "org.sc")
+summary(bso.wide)
+
+#subset inorganic c fraction masses
+bayes.sub.inorg <- select(bayesdf, c(site, species,depth, fraction.code, inorg.c.mass.frac))
+bsi.wide<-spread(bayes.sub.inorg, fraction.code, inorg.c.mass.frac)
+names(bsi.wide) <- c("site","species", "depth", "inorg.pom", "inorg.sa", "inorg.sc")
+summary(bsi.wide)
+```
+
+
+Turn the fraction masses into normalized Dirichlet distributions
+```{r }
+#install.packages("FlexDir")
+
+bso.wide<-na.omit(bso.wide)
+bso.diri <- FD.normalization(bso.wide[,4:6]) 
+head(bso.diri)  
+bso.w.d<-cbind(bso.wide, bso.diri)
+
+#make sure depth and species are factors
+bso.w.d$species <-
+
+
+bsi.wide<-na.omit(bsi.wide)
+bsi.diri <- FD.normalization(bsi.wide[,4:6])
+head(bsi.diri)
+bsi.w.d<-cbind(bsi.wide, bsi.diri)
+```
+
+
+Paste the data back onto the bayesdf dataframe
+
+First, make the wide version of the bayesdf dataframe.
+```{r }
+#spread the bulk C data over values of fraction.code
+bayesdf.wide <- spread(bayesdf, fraction.code, org.c.bulk.wt)
+bayesdf.wide2 <- bayesdf.wide[,1:23]
+bayesdf.wide2 <- rename(bayesdf.wide2, replace=c("pom"="org.c.bulk.wt"))
+bayesdf.wide2.complete <- na.omit(bayesdf.wide2)
+```
+
+
+Save the dataframe
+```{r}
+write.csv(bayesdf.wide2.complete, file = "bayesdf.wide2.complete.csv")
+```
+
+Read in the data frame
+```{r }
+bayesdf.wide2.complete <- read.csv("bayesdf.wide2.complete.csv", header=TRUE)
+
+summary(bayesdf.wide2.complete)
+``` 
+
+
+Combine the dirichlet distribution data with the bayesdf.wide2.complete data
+```{r}
+diri.df <- join(bayesdf.wide2.complete, bsi.w.d[,c(1:3, 7:9)], type = "left")
+summary(diri.df)
+
+diri.df <- join(diri.df, bso.w.d[,c(1:3,7:9)], type="left")
+summary(diri.df)
+```
+
+Model 1, bulk fractions
+
+```{r}
+library(DirichletReg)
+orgs <- DR_data(bso.w.d[,7:9])
+mod1 <- DirichReg(orgs ~ species*depth, data = bso.w.d[, c(1:3, 7:9)])
+mod2 <- DirichReg(orgs ~ species + depth, data = bso.w.d[,c(1:3, 7:9)])
+summary(mod1)
+summary(mod2)
+
+AIC(mod1)
+AIC(mod2)
+#picea is quite different from all other species in terms of organic C distribution. 
+```
+
+
+Plot the organic C distributions by species at depth 1.
+```{r}
+
+bso.w.d1<-subset(bso.w.d, depth==1)
+orgs1 <- DR_data(bso.w.d1[,7:9])
+
+rangens <- function(sp.name, depth="1", n= 1000){
+            alphas <-matrix(predict(mod1, alpha=TRUE)$alpha[bso.w.d$species==sp.name &
+                            bso.w.d$depth==depth,], ncol=3)[1,]
+            rands <- rdirichlet(n, alphas)
+            return(rands)
+}
+
+#apply the random generation to each level of the 'species' variable
+a <- lapply(levels(bso.w.d1$species), rangens)
+names(a) <- levels(bso.w.d1$species)
+summary(a)
+###to apply to the variable 'fraxinus', specify length as 5, do the following:
+#rangens("fraxinus", n = 5)
+###
+library(car)
+library(RColorBrewer)
+mycols<-brewer.pal(n=6, name="Accent")
+mycols2<-adjustcolor(mycols, alpha.f=0.1)
+mycols3<-brewer.pal(n=6, name="Dark2")
+
+
+plot.new()
+plot(orgs1,  reset_par = FALSE, type="n")
+lines(dataEllipse(toTernary(DR_data(a[[1]])), draw=FALSE)$`0.95`,col=mycols3[[1]])
+lines(dataEllipse(toTernary(DR_data(a[[2]])), draw=FALSE)$`0.95`,col=mycols3[[2]])
+lines(dataEllipse(toTernary(DR_data(a[[3]])), draw=FALSE)$`0.95`,col=mycols3[[3]])
+lines(dataEllipse(toTernary(DR_data(a[[4]])), draw=FALSE)$`0.95`,col=mycols3[[4]])
+lines(dataEllipse(toTernary(DR_data(a[[5]])), draw=FALSE)$`0.95`,col=mycols3[[5]])
+lines(dataEllipse(toTernary(DR_data(a[[6]])), draw=FALSE)$`0.95`,col=mycols3[[6]])
+
+#1=Acer, 2=fagus, 3=fraxinus, 4=picea, 5=populus, 6=quercus
+```
+
+
+Do the same for depth 2
+```{r}
+
+bso.w.d2<-subset(bso.w.d, depth==2)
+orgs2 <- DR_data(bso.w.d1[,7:9])
+
+rangens2 <- function(sp.name, depth="2", n= 1000){
+            alphas <-matrix(predict(mod1, alpha=TRUE)$alpha[bso.w.d$species==sp.name &
+                            bso.w.d$depth==depth,], ncol=3)[1,]
+            rands <- rdirichlet(n, alphas)
+            return(rands)
+}
+
+#apply the random generation to each level of the 'species' variable
+b <- lapply(levels(bso.w.d2$species), rangens2)
+names(b) <- levels(bso.w.d2$species)
+summary(b)
+###to apply to the variable 'fraxinus', specify length as 5, do the following:
+#rangens("fraxinus", n = 5)
+###
+
+plot.new()
+plot(orgs2,  reset_par = FALSE, type="n")
+lines(dataEllipse(toTernary(DR_data(b[[1]])), draw=FALSE)$`0.95`,col=mycols3[[1]])
+lines(dataEllipse(toTernary(DR_data(b[[2]])), draw=FALSE)$`0.95`,col=mycols3[[2]])
+lines(dataEllipse(toTernary(DR_data(b[[3]])), draw=FALSE)$`0.95`,col=mycols3[[3]])
+lines(dataEllipse(toTernary(DR_data(b[[4]])), draw=FALSE)$`0.95`,col=mycols3[[4]])
+lines(dataEllipse(toTernary(DR_data(b[[5]])), draw=FALSE)$`0.95`,col=mycols3[[5]])
+lines(dataEllipse(toTernary(DR_data(b[[6]])), draw=FALSE)$`0.95`,col=mycols3[[6]])
+
+#1=Acer, 2=fagus, 3=fraxinus, 4=picea, 5=populus, 6=quercus
+
+```
+
+
+make a stacked plot
+```{r}
+#install.packages("wesanderson")
+library(wesanderson)
+fill=wes_palette("FantasticFox1", 3)
+
+library(tidyr)
+diri.df.long <- diri.df%>%
+  select(species, depth, org.pom, org.sa, org.sc)%>%
+  group_by(species, depth)%>%
+  slice(1)
+diri.df.long <- diri.df.long%>%gather(key="fraction", value="weight", -species, -depth)  
+
+diri.df.long$fraction <- as.factor(diri.df.long$fraction)  
+summary(diri.df.long)  
+
+sp.orgc<-diri.df.long %>%
+  group_by(species) %>%
+  summarize(total_c = sum(weight))
+sp.orgc
+
+c.plot.species <- ggplot(diri.df.long, aes(x = species, y = weight, fill = fraction)) + 
+  geom_col() +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Dominant Species", y = "Proportion of dry-weight OC contributed by solid fraction")
+
+c.plot.species + 
+  facet_wrap(~depth) +
+  scale_fill_manual(values=fill)
+```
+
+
+Plot organic C weights (sum of fractions)
+```{r}
+orgc.totwt <- ggplot(diri.df, aes(x=species, y=totwt)) +
+  geom_point() +
+  geom_boxplot(alpha=0.3) +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Dominant Species", y = "Total organic C (sum of fractions)") 
+
+orgc.totwt +
+  facet_wrap(~depth) +
+  geom_hline(yintercept=0.482, linetype="dashed", color = "red")
+```
+
+
+Plot organic C weights (total bulk)
+```{r }
+orgc.bulkwt <- ggplot(diri.df, aes(x=species, y=org.c.start.mass)) +
+  geom_point() +
+  geom_boxplot(alpha=0.3) +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Dominant Species", y = "Total organic C (g) (bulk soil)") 
+
+orgc.bulkwt +
+  facet_wrap(~depth) +
+  #mean bulk mass
+  geom_hline(yintercept=0.446, linetype="dashed", color = "red", size=1) + 
+  #mean sum of fractions mass
+  geom_hline(yintercept=0.482, linetype="dashed", color="black")
+```
+
+
+Test the relationship between species, depth, fractionation status, and organic c total weight.
+```{r }
+#data
+fracwts <- select(diri.df, site, depth, species, totwt)
+fracwts$frac <- 1
+
+
+bulkwts <- select(diri.df, site, depth, species, org.c.start.mass)
+bulkwts$frac <- 2
+bulkwts$totwt <- bulkwts$org.c.start.mass
+bulkwts <- select(bulkwts, site, depth, species, totwt, frac)
+
+orgwts <- rbind(fracwts, bulkwts)
+summary(orgwts)  
+orgwts$frac <- as.factor(orgwts$frac)  
+
+##multimodel comparison##
+
+#install.packages("AICcmodavg")
+library(AICcmodavg)
+
+Cand.set <- list(
+  lm(totwt ~ 1, data=orgwts),
+  lm(totwt ~ species, data=orgwts),
+  lm(totwt ~ depth, data=orgwts),
+  lm(totwt ~ frac, data=orgwts),
+  lm(totwt ~ species + depth + frac, data = orgwts),
+  lm(totwt ~ species*depth + frac, data = orgwts)
+)
+
+aictab(cand.set = Cand.set, second.ord = FALSE)
+```
+
+
+Model 6 carries 97% of the cumulative AIC weight. Models 2 and 4 do worse than random.
+
+Model 6
+```{r }
+totc6<-lm(totwt ~ species*depth + frac, data = orgwts)
+summary(totc6)
+
+library(lme4)
+totc6.lme <- lmer(totwt ~ species*depth + frac + (1|site), data = orgwts)
+summary(totc6.lme)
+emmeans(totc6.lme, list(pairwise ~ species*depth), adjust= "tukey")
+
+library(emmeans)
+orgwts_bulk <- orgwts[orgwts$frac==2,]
+totc6.lme.bulk <- lmer(totwt ~ species*depth + (1|site), data = orgwts_bulk)
+emmeans(totc6.lme.bulk, list(pairwise ~ species*depth), adjust="tukey")
+
+
+orgwts_frac <- orgwts[orgwts$frac==1,]
+totc6.lme.frac <- lmer(totwt ~ species*depth + (1|site), data = orgwts_frac)
+emmeans(totc6.lme.frac, list(pairwise ~ species*depth), adjust="tukey")
+
+orgwts_depth1 <- orgwts[orgwts$depth==1,] # don't do this! P hack alert!
+orgwts_depth2 <- orgwts[orgwts$depth==2,]
+
+totc6.lme1 <- lmer(totwt ~ species + frac + (1|site), data = orgwts_depth1)
+totc6.lme2 <- lmer(totwt ~ species + frac + (1|site), data = orgwts_depth2)
+
+
+#posthoc means comparison
+emmeans(totc6.lme1, list(pairwise ~ species), adjust = "tukey")
+emmeans(totc6.lme2, list(pairwise ~ species), adjust = "tukey")
+
+```
+
+
+
+```{ r}
+orgwts$interaction <- interaction(orgwts$species, orgwts$depth)
+multComp(totc6_mle4, "interaction")
+
+orgwts_depth1 <- orgwts[orgwts$depth==1,] # don't do this! P hack alert!
+orgwts_depth2 <- orgwts[orgwts$depth==2,]
+
+wt.mod1 <- lm(totwt ~ species + frac , data = orgwts_depth1)
+summary(wt.mod1)
+multComp(wt.mod1, "species")
+
+wt.mod2 <- lm(totwt ~ species + frac, data=orgwts_depth2)
+multComp(wt.mod2, "species")
+```
+
+
+
+Hacky QRPs ahoy:
+```{r}
+bso.w.d$pom_sc <- bso.w.d[,7] / bso.w.d[,9]
+
+pomsc.rag<-lm(pom_sc ~ species * depth, data=bso.w.d)
+aov.pomsc <- aov(pomsc.rag)
+TukeyHSD(aov.pomsc)
+  
+#Anova(pomsc.rag)
+#multComp(lm(pom_sc ~ species + depth, bso.w.d), "species") # not realistic because no interactions
+```
+
+
+Test relationship between litter lignin:N ratio and pom_sc ratio
+```{r }
+litter <- read.csv("litter_cn.csv", header=TRUE)
+summary(litter)
+#litter$lnratio <- as.numeric(litter$lnratio)
+
+#litter$lnratio <- (litter$lignin.mg.g/100)/litter$pct.n
+#summary(litter)
+
+#write.csv(litter, file="litter_cn.csv")
+
+#add litter ln ratio to the bso.w.d dataframe
+bso.w.d.sub<-bso.w.d[,c(1:3, 7:10)]
+
+#add mean values of litter ln ratio 
+bso.w.d.sub$lnratio <- bso.w.d.sub$species
+bso.w.d.sub$lnratio <- mapvalues(bso.w.d.sub$lnratio, from = c("fraxinus", "quercus", "acer", "populus", "fagus", "picea"), to=c("0.531", "2.030", "1.154", "1.149", "2.444", "2.144"))
+bso.w.d.sub$lnratio <- as.numeric(as.character(bso.w.d.sub$lnratio))
+summary(bso.w.d.sub)
+```
+
+
+Run regression analysis again using ln ratio instead of species
+```{r }
+pom_sc_lm<-lm(pom_sc ~ lnratio + depth, data=bso.w.d.sub)
+pom_sc_lm2<-lm(pom_sc ~ lnratio*depth, data=bso.w.d.sub)
+
+AIC(pom_sc_lm)
+AIC(pom_sc_lm2)
+
+summary(pom_sc_lm)
+```
+
+ggplot(data = df, aes(x = x, y = y, label=y)) +
+  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point() + facet_wrap(~class)
+  
+Plot the lm
+```{r}
+#library(devtools)
+#source_gist("524eade46135f6348140")
+
+pom_sc_plot <- ggplot(bso.w.d.sub, aes(x=lnratio, y=pom_sc)) +
+  geom_point() +
+  geom_jitter(position = position_jitter(width = .15)) +
+  #stat_smooth_func(geom="text", color="black", method="lm", hjust=0, vjust=-1.3, parse=TRUE) +
+  geom_smooth(method="lm", color="black") +
+  theme(legend.title = element_blank(), axis.text.x = element_text()) +
+  labs(x = "Litter lignin:N ratio", y = "Soil POM:SC ratio") 
+pom_sc_plot + facet_wrap(~depth)
+
+
+#pom_sc2 <- ggplot(bso.w.d.sub, aes())
+```
+
+
+Get difference in start and final soil c
+```{r }
+#get the values
+diri.df$pct.diff <- ((diri.df$totwt - diri.df$org.c.start.mass)/diri.df$totwt)*100
+
+#plot the difference
+pct.diff <- ggplot(diri.df, aes(x=species, y=pct.diff)) +
+  geom_point() +
+  geom_boxplot(alpha=0.3) +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Dominant Species", y = "Difference between sum-of-fractions and bulk org C (%)") 
+
+pct.diff +
+  facet_wrap(~depth) 
+
+pctdiff.lm<-lm(pct.diff ~ species*depth, data=diri.df)
+summary(pctdiff.lm)
+```
+

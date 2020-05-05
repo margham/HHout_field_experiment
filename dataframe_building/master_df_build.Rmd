@@ -1,0 +1,875 @@
+---
+title: "Master_dataframe"
+author: "Becca"
+date: "3/6/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+This is a file for harmonizing and combining data frames containing all of the data collected and processed for analyzing patterns in the Hollandse Hout field site. 
+
+For the final data
+
+The following variables should be included in the final data frame:
+
+* litter chemistry
+* soil organic/inorganic C
+* soil fractions (pom, sand/agg fraction, silt/clay fraction, doc)
+* soil pH
+* soil moisture
+* soil bulk density
+
+UPDATE 30 APRIL: The most updated version of the hhout master dataframe has been saved as 'hhout_master.csv'. 
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r }
+library(tidyverse)
+#library(dplyr)
+```
+
+cn.wts.sums2
+```{ r }
+cn.wts.sums2 <- read.csv("cn.wts.sums2.csv")
+
+summary(cn.wts.sums2)
+
+cn.wts.sums2$depth <- as.factor(cn.wts.sums2$depth)
+```
+
+
+combined.data.cn
+```{ r }
+combined.data.cn <- read.csv("combined.data.cn.csv", header=TRUE)
+
+summary(combined.data.cn)
+
+combined.data.cn$depth <- as.factor(combined.data.cn$depth)
+
+#rename the levels of species to match the litter_chem data
+combined.data.cn$species <- recode(combined.data.cn$species, acer='acer', fagus='fagus', fraxinus='fraxinus', picea='picea', picea_ab='picea', picea_sit='picea', populus='populus', quercus='quercus')
+
+levels(combined.data.cn$species)
+
+summary(combined.data.cn)
+
+#rename mis-labeled levels
+combined.data.cn$site <- recode(combined.data.cn$site, '127G'= '157G', '130E' = '130E' ,'130E1' = '130E')
+
+levels(combined.data.cn$site)
+```
+
+
+Remove levels of combined.data.cn that don't match with other data frames (there has to be a better way to do this).
+```{ r }
+#remove levels that don't match other data frames
+#c("133V2", "157M", "130N1", "blank")
+
+# newiris <- subset(iris, iris$Species != "virginica", drop = TRUE)
+combined.data.cn.drop <- subset(combined.data.cn, combined.data.cn$site != "133V2", drop=TRUE)
+# newiris$Species <- droplevels(newiris$Species) ## equivalent to newiris$Species[,drop=TRUE]
+combined.data.cn.drop$site <- droplevels(combined.data.cn.drop$site)
+
+combined.data.cn.drop <- subset(combined.data.cn.drop, combined.data.cn.drop$site != "157M", drop=TRUE)
+combined.data.cn.drop$site <- droplevels(combined.data.cn.drop$site)
+
+combined.data.cn.drop <- subset(combined.data.cn.drop, combined.data.cn.drop$site != "130N1", drop=TRUE)
+combined.data.cn.drop$site <- droplevels(combined.data.cn.drop$site)
+
+combined.data.cn.drop <- subset(combined.data.cn.drop, combined.data.cn.drop$site != "blank", drop=TRUE)
+combined.data.cn.drop$site <- droplevels(combined.data.cn.drop$site)
+
+levels(combined.data.cn.drop$site)
+
+
+```
+
+Rename this awful-long dataframe
+```{ r }
+cn.dat <- combined.data.cn.drop
+write.csv(cn.dat, file="cn.dat.csv", row.names=FALSE)
+```
+
+
+Read in the new data frame
+```{ r }
+cn.dat<-read.csv("cn.dat.csv", header=TRUE)
+
+summary(cn.dat)
+cn.dat$depth <- as.factor(cn.dat$depth)
+summary(cn.dat)
+
+levels(cn.dat$site)
+
+```
+
+Combine the sites that have been arbitrarily separated
+```{ r }
+#site 130 depth 1
+cn.dat$mean.c.pre[c(27)] <- cn.dat$mean.c.pre[c(138)]
+cn.dat$mean.n.pre[c(27)] <- cn.dat$mean.n.pre[c(138)]
+cn.dat$mean.c.post[c(27)] <- cn.dat$mean.c.post[c(138)]
+cn.dat$mean.n.post[c(27)] <- cn.dat$mean.n.post[c(138)]
+cn.dat$mean.pct.mass.loss[c(27)] <- cn.dat$mean.pct.mass.loss[c(138)]
+cn.dat[c(27),]
+
+#site 130 depth 2
+cn.dat$mean.c.pre[c(28)] <- cn.dat$mean.c.pre[c(139)]
+cn.dat$mean.n.pre[c(28)] <- cn.dat$mean.n.pre[c(139)]
+cn.dat$mean.c.post[c(28)] <- cn.dat$mean.c.post[c(139)]
+cn.dat$mean.n.post[c(28)] <- cn.dat$mean.n.post[c(139)]
+cn.dat$mean.pct.mass.loss[c(28)] <- cn.dat$mean.pct.mass.loss[c(139)]
+cn.dat[c(28),]
+
+#site 130 depth 3
+cn.dat$mean.c.pre[c(29)] <- cn.dat$mean.c.pre[c(140)]
+cn.dat$mean.n.pre[c(29)] <- cn.dat$mean.n.pre[c(140)]
+cn.dat$mean.c.post[c(29)] <- cn.dat$mean.c.post[c(140)]
+cn.dat$mean.n.post[c(29)] <- cn.dat$mean.n.post[c(140)]
+cn.dat$mean.pct.mass.loss[c(29)] <- cn.dat$mean.pct.mass.loss[c(140)]
+cn.dat[c(29),]
+
+#site 130 depth 4
+cn.dat$mean.c.pre[c(30)] <- cn.dat$mean.c.pre[c(141)]
+cn.dat$mean.n.pre[c(30)] <- cn.dat$mean.n.pre[c(141)]
+cn.dat$mean.c.post[c(30)] <- cn.dat$mean.c.post[c(141)]
+cn.dat$mean.n.post[c(30)] <- cn.dat$mean.n.post[c(141)]
+cn.dat$mean.pct.mass.loss[c(30)] <- cn.dat$mean.pct.mass.loss[c(141)]
+cn.dat[c(30),]
+
+View(cn.dat)
+```
+
+Drop unnecessary rows
+```{ r }
+cn.dat<-cn.dat[-c(138, 139, 140, 141), ]
+
+View(cn.dat)
+```
+
+cn.loc
+```{ r }
+cn.loc <- read.csv("cn.loc.csv")
+summary(cn.loc)
+
+#make depth a factor
+cn.loc$depth <- as.factor(cn.loc$depth)
+
+#rename the levels of species to match the litter_chem data
+cn.loc$species <- recode(cn.loc$species, acer='acer', fagus='fagus', fraxinus='fraxinus', picea_ab='picea', picea_sit='picea', populus='populus', quercus='quercus')
+
+levels(cn.loc$species)
+```
+
+
+litter chemistry
+```{ r }
+litter_chem <- read.csv("litter_chem.csv")
+
+summary(litter_chem)
+
+litter_chem <- 
+litter_chem %>%
+  rename(
+    litter.pct.n = pct.n, 
+    litter.pct.c = pct.c, 
+    litter.lignin.mg.g = lignin.mg.g,
+    litter.cell.mg.g = cell.mg.g, 
+    litter.hwec.ppm = mean_hwec_ppm
+  )
+```
+
+
+Check concordance among dataframes using common variables
+```{ r }
+all.equal(cn.wts.sums2$site, cn.loc$site)
+#true
+all.equal(cn.loc$site, cn.dat$site)
+#very different. 
+
+levels(cn.dat$site)
+levels(cn.loc$site)
+#this is because combined.data.cn has more levels than the other data frames.
+#extra sites in cn.dat are: 131V2, 156Q, and 160D
+
+all.equal(cn.wts.sums2$pct.n.pre.ashing, cn.loc$pct.n.pre.ashing)
+#okay, so these are the same
+```
+
+
+Check what variables are in each data frame
+```{ r }
+names(cn.loc)
+```
+> names(cn.loc)
+ [1] "X"                      "site"                   "depth"                  "fraction.name"         
+ [5] "fraction.code"          "pct.n.pre.ashing"       "pct.c.pre.ashing"       "pct.n.post.ashing"     
+ [9] "pct.c.post.ashing"      "pct.mass.loss"          "c.in.org.fract"         "org.c.in.t.frac"       
+[13] "n.in.org.fract"         "org.n.in.t.frac"        "species"                "mean.c.pre"            
+[17] "mean.n.pre"             "mean.c.post"            "mean.n.post"            "mean.pct.mass.loss"    
+[21] "fraction.id"            "c.in.org.fraction.bulk" "org.c.in.total.bulk"    "n.in.org.fraction.bulk"
+[25] "org.n.in.total.bulk"    "sample"                 "soil.start.wt"          "weight.g"              
+[29] "orgc.weight"            "totwt"                  "pct.c.cont.by.fraction" "lon"                   
+[33] "lat"                    "ele"                    "time"                   "name"
+
+#the variables we need are everything except for X, ele, time, and name
+
+```{ r}
+names(cn.dat)
+```
+
+#we need everything except level 
+
+```{ r}
+names(cn.wts.sums2)
+```
+
+> names(cn.wts.sums2)
+ [1] "site"                    "depth"                   "fraction.name"           "fraction.code"          
+ [5] "pct.n.pre.ashing"        "pct.c.pre.ashing"        "pct.n.post.ashing"       "pct.c.post.ashing"      
+ [9] "pct.mass.loss"           "c.in.org.fract"          "org.c.in.t.frac"         "n.in.org.fract"         
+[13] "org.n.in.t.frac"         "species"                 "mean.c.pre"              "mean.n.pre"             
+[17] "mean.c.post"             "mean.n.post"             "mean.pct.mass.loss"      "fraction.id"            
+[21] "c.in.org.fraction.bulk"  "org.c.in.total.bulk"     "n.in.org.fraction.bulk"  "org.n.in.total.bulk"    
+[25] "sample"                  "soil.start.wt"           "weight.g"                "orgc.weight"            
+[29] "totwt"                   "pct.c.cont.by.fraction"  "org.c.start.mass"        "org.c.fraction.mass"    
+[33] "soil.final.wt"           "org.c.fraction.mass.sum" "inorg.c.mass.frac"       "inorg.c.mass.bulk"      
+[37] "org.c.bulk.wt"     
+
+#use everything 
+
+```{ r}
+names(litter_chem)
+```
+
+#use everything
+
+Join cn.wts.sums2 and cn.loc
+```{ r }
+#first subset the cn.loc values that I don't need (X, ele, time, and name)
+cn.loc.sub <- cn.loc[c(-1,-34, -35, -36)]
+names(cn.loc.sub)
+
+#now do a full join
+join1 <- full_join(cn.wts.sums2, cn.loc.sub)
+
+#check summary
+summary(join1)
+```
+
+Joining, by = c("site", "depth", "fraction.name", "fraction.code", "pct.n.pre.ashing", "pct.c.pre.ashing", "pct.n.post.ashing", "pct.c.post.ashing", "pct.mass.loss", "c.in.org.fract", "org.c.in.t.frac", "n.in.org.fract", "org.n.in.t.frac", "species", "mean.c.pre", "mean.n.pre", "mean.c.post", "mean.n.post", "mean.pct.mass.loss", "fraction.id", "c.in.org.fraction.bulk", "org.c.in.total.bulk", "n.in.org.fraction.bulk", "org.n.in.total.bulk", "sample", "soil.start.wt", "weight.g", "orgc.weight", "totwt", "pct.c.cont.by.fraction")
+
+Now join the cn.dat
+```{ r }
+#remove the values of cn.dat I don't need (depth_cm)
+cn.dat.sub <- cn.dat[c(-4)]
+names(cn.dat.sub)
+
+#now do a full join
+join2 <- full_join(join1, cn.dat.sub)
+```
+
+Joining, by = c("site", "depth", "species", "mean.c.pre", "mean.n.pre", "mean.c.post", "mean.n.post", "mean.pct.mass.loss")
+
+* everything in the cn.dat.sub that had a match with the join1 df worked!
+
+Make site and depth factors again
+```{ r }
+join2$site <- as.factor(join2$site)
+join2$depth <- as.factor(join2$depth)
+```
+
+Now join with the litter data
+```{ r}
+join3 <- full_join(join2, litter_chem)
+
+summary(join3)
+head(join3)
+```
+
+Yay! Complete data frame!
+
+Now save as a Master dataframe so we can use it in analysis
+```{ r }
+join3$depth <- as.factor(join3$depth)
+
+write.csv(join3, file = "MasterDF.csv", row.names = FALSE)
+```
+
+Read in the dataframe to check it works
+```{ r }
+masterdf <- read.csv("MasterDF.csv", header=TRUE)
+
+summary(masterdf)
+masterdf$depth <- as.factor(masterdf$depth)
+masterdf$site <- as.factor(masterdf$site)
+```
+
+### 06 March 2020 
+
+Okay, so some sites have discrepancies in the data. Sites to check: 
+
+a. 126E - discrepancy in mean.c.pre, mean.n.pre, mean.c.post, and mean.n.post for *depth 1*
+b. 126F - *very large* discrepancy in the mean.c.pre, mean.n.pre, mean.c.post, mean.n.post, and mean.pct.mass.loss in *depth 2*
+c. 127F - *very small* discrepancy in mean.c.pre, mean.n.pre, mean.c.post, mean.n.post, and mean.pct.mass.loss in *depth 2*
+d. 131N1 - *moderate* discrepancy in mean.c.pre, mean.n.pre, mean.c.post, mean.n.post, and mean.pct.mass.loss in *depth 1* and *depth 2*
+e. 131N2 - *mistake in decimal placement* for *mean.c.post* (decimal moved 1 place to the left) for *depth 2*
+f. 131V1 - *moderate discrepancy* in mean.c.pre, mean.n.pre, mean.c.post, mean.n.post, and mean.pct.mass.loss in *depth 2*
+g. 131V2 - this was a site measured in round 1 that was *not measured in fractionation*
+h. 132Q - *large* discrepancy in  mean.c.pre, mean.n.pre, mean.c.post, mean.n.post, and mean.pct.mass.loss in *depth 2* - I think what I have for depth 2 in the soil fractions section *might actually be depth 3*!!
+i. 134T - *small* discrepancy in mean.c.pre, mean.n.pre, mean.c.post, mean.n.post, and mean.pct.mass.loss in *depth 1* and *depth 2* 
+j. 134X - *moderate* discrepancy in mean.c.pre, mean.n.pre, mean.c.post, mean.n.post, and mean.pct.mass.loss in *depth 2*
+k. 135J - *small* discrepancy in mean.c.pre, mean.n.pre, mean.c.post, mean.n.post, and mean.pct.mass.loss in *depth 2*
+l. 156Q - this was another site measured in round 1 that was *not measured in fractionation*
+m. 157G - *no apparent discrepancy*, not sure why they aren't matching up -possibly because of the *NAs that are being written as <NA> ?*
+n. 159L - *small* discrepancy in mean.c.pre, mean.n.pre, mean.c.post, mean.n.post, and mean.pct.mass.loss in *depth 1* and *depth 2*
+o. 160D - this was another site measured in round 1 that was not measured in fractionation
+
+There are discrepancies because I averaged the values of the mean.c.pre, mean.n.pre, mean.c.post, and mean.n.post for the bulk soil dataframe but did not do so for the cn.wts.sums dataframe. 
+
+### 09 March 2020
+
+## Correct simple errors first
+
+* 157G - added the pH from the bulk df to the fractionation df and deleted the rest of the row
+* 131N2 - moved the decimal place for mean.c.post
+
+adding mean.ph, avg.bd, pct.m from row 216 to rows 73, 74, 75 (131N2 depth 2)
+```{ r}
+#deck2$value[c(13, 26, 39, 52)] <- 14
+masterdf$mean.ph[c(7, 8, 9)] <- masterdf$mean.ph[c(188)]
+masterdf$avg.bd[c(7, 8, 9)] <- masterdf$avg.bd[c(188)]
+masterdf$pct.m[c(7, 8, 9)] <- masterdf$pct.m[c(188)]
+masterdf[c(7, 8, 9),]
+
+#check the 126E
+masterdf[masterdf$site=="126E", ]
+```
+
+
+Check 157G
+```{ r }
+masterdf[masterdf$site=='157G', ]
+
+#add the pH from the bulk sites to fracitonated samples
+masterdf$mean.ph[c(130, 131, 132)] <- masterdf$mean.ph[c(203)]
+masterdf$mean.ph[c(133, 134, 135)] <- masterdf$mean.ph[c(204)]
+
+masterdf[masterdf$site=='157G', ]
+```
+
+Can't seem to get rid of that last na row, leave it for now.
+
+Check 126F
+```{ r }
+masterdf[masterdf$site=='126F', ]
+
+#take the average of mean.c.pre, mean.c.post, mean.n.pre, mean.n.post for depth 2 (193 to 13, 14, 15)
+masterdf$mean.c.pre[c(13, 14, 15)] <- mean(masterdf$mean.c.pre[c(193, 13)])
+masterdf$mean.n.pre[c(13, 14, 15)] <- mean(masterdf$mean.n.pre[c(193, 13)])
+masterdf$mean.c.post[c(13, 14, 15)] <- mean(masterdf$mean.c.post[c(193, 13)])
+masterdf$mean.n.post[c(13, 14, 15)] <- mean(masterdf$mean.n.post[c(193, 13)])
+masterdf$mean.pct.mass.loss[c(13, 14, 15)] <- mean(masterdf$mean.pct.mass.loss[c(13, 193)])
+masterdf[c(13, 14, 15),]
+
+#move mean.ph to depths 1 and 2 fractionation (192 to 10, 11, 12 and 193 to 13, 14, 15)
+masterdf$mean.ph[c(13, 14, 15)] <- masterdf$mean.ph[c(193)]
+masterdf$mean.ph[c(10, 11, 12)] <- masterdf$mean.ph[c(192)]
+
+masterdf[masterdf$site=='126F', ]
+#done
+```
+
+Check 127F
+```{ r }
+masterdf[masterdf$site=='127F', ]
+
+#take the average of mean.c.pre, mean.c.post, mean.n.pre, mean.n.post for depth 2 (193 to 13, 14, 15)
+masterdf$mean.c.pre[c(31, 32, 33)] <- mean(masterdf$mean.c.pre[c(200, 31)])
+masterdf$mean.n.pre[c(31, 32, 33)] <- mean(masterdf$mean.n.pre[c(200, 31)])
+masterdf$mean.c.post[c(31, 32, 33)] <- mean(masterdf$mean.c.post[c(200, 31)])
+masterdf$mean.n.post[c(31, 32, 33)] <- mean(masterdf$mean.n.post[c(200, 31)])
+masterdf$mean.pct.mass.loss[c(31, 32, 33)] <- mean(masterdf$mean.pct.mass.loss[c(200, 31)])
+masterdf[c(31, 32, 33),]
+
+#move mean.ph to depths 1 and 2 fractionation (192 to 10, 11, 12 and 193 to 13, 14, 15)
+masterdf$mean.ph[c(28, 29, 30)] <- masterdf$mean.ph[c(199)]
+masterdf$mean.ph[c(31, 32, 33)] <- masterdf$mean.ph[c(200)]
+
+masterdf[masterdf$site=='127F', ]
+#done
+```
+
+Check 131N1
+```{ r }
+masterdf[masterdf$site=='131N1', ]
+
+#move mean.ph & avg.bd to depths 1 and 2 fractionation (217 to 64:66) and 
+masterdf$mean.ph[c(64, 65, 66)] <- masterdf$mean.ph[c(217)]
+masterdf$avg.bd[c(64, 65, 66)] <- masterdf$mean.ph[c(217)]
+#218 to 67:69
+masterdf$mean.ph[c(67, 68, 69)] <- masterdf$mean.ph[c(218)]
+masterdf$avg.bd[c(67, 68, 69)] <- masterdf$avg.bd[c(218)]
+
+
+masterdf[masterdf$site=='131N1', ]
+#done
+```
+
+
+Check 131N2
+```{ r }
+masterdf[masterdf$site=='131N2', ]
+#move mean.pg, avg.bd, and pct.m from 221 to 73, 74, 75
+masterdf$mean.ph[c(73, 74, 75)] <- masterdf$mean.ph[c(221)]#7.3580
+masterdf$avg.bd[c(73, 74, 75)] <- masterdf$avg.bd[c(221)]#0.978
+masterdf$pct.m[c(73, 74, 75)] <- masterdf$pct.m[c(221)]#24.489
+
+masterdf[masterdf$site=='131N2', ]
+```
+
+
+Check 131V1
+```{ r }
+masterdf[masterdf$site=='131V1', ]
+
+#move depth 2 ph, bd and pct.m to 79-81
+masterdf$mean.ph[c(79, 80, 81)] <- masterdf$mean.ph[c(224)]#7.322
+masterdf$avg.bd[c(79, 80, 81)] <- masterdf$avg.bd[c(224)]#0.358
+masterdf$pct.m[c(79, 80, 81)] <- masterdf$pct.m[c(224)]#18.439
+
+masterdf[masterdf$site=='131V1', ]
+#done
+```
+
+
+Check 132Q
+```{ r }
+masterdf[masterdf$site=='132Q', ]
+#depth 1
+masterdf$mean.ph[c(82, 83, 84)] <- masterdf$mean.ph[c(85)]
+masterdf$avg.bd[c(82, 83, 84)] <- masterdf$avg.bd[c(85)]
+masterdf$pct.m[c(82, 83, 84)] <- masterdf$pct.m[c(85)]
+#depth 2
+masterdf$mean.ph[c(85, 86, 87)] <- masterdf$mean.ph[c(231)]
+masterdf$avg.bd[c(85, 86, 87)] <- masterdf$avg.bd[c(231)]
+masterdf$pct.m[c(85, 86, 87)] <- masterdf$pct.m[c(231)]
+
+masterdf[masterdf$site=='132Q', ]
+#ok.
+```
+
+
+Check 134T
+```{ r }
+masterdf[masterdf$site=='134T', ]
+
+#move depth 1 ph, bd and pct.m to 106-108
+masterdf$mean.ph[c(106, 107, 108)] <- masterdf$mean.ph[c(240)]#6.908
+masterdf$avg.bd[c(106, 107, 108)] <- masterdf$avg.bd[c(240)]#0.739
+masterdf$pct.m[c(106, 107, 108)] <- masterdf$pct.m[c(240)]#66.555
+
+#move depth 2 ph, bd and pct.m to 109-111
+masterdf$mean.ph[c(109, 110, 111)] <- masterdf$mean.ph[c(241)]#7.224
+masterdf$avg.bd[c(109, 110, 111)] <- masterdf$avg.bd[c(241)]#0.904
+masterdf$pct.m[c(109, 110, 111)] <- masterdf$pct.m[c(241)]#56.755
+
+masterdf[masterdf$site=='134T', ]
+
+#ok
+```
+
+
+Check 134X
+```{ r }
+masterdf[masterdf$site=='134X', ]
+
+#take the average of mean.c.pre, mean.c.post, mean.n.pre, mean.n.post for depth 2 (193 to 13, 14, 15)
+# masterdf$mean.c.pre[c(115, 116, 117)] <- mean(masterdf$mean.c.pre[c(244, 115)])
+# masterdf$mean.n.pre[c(115, 116, 117)] <- mean(masterdf$mean.n.pre[c(244, 115)])
+# masterdf$mean.c.post[c(115, 116, 117)] <- mean(masterdf$mean.c.post[c(244, 115)])
+# masterdf$mean.n.post[c(115, 116, 117)] <- mean(masterdf$mean.n.post[c(244, 115)])
+# masterdf$mean.pct.mass.loss[c(115, 116, 117)] <- mean(masterdf$mean.pct.mass.loss[c(244, 115)])
+# masterdf[c(115, 116, 117),]
+
+#move mean.ph to depths 1 and 2 fractionation 
+masterdf$mean.ph[c(115, 116, 117)] <- masterdf$mean.ph[c(244)]
+masterdf$avg.bd[c(115, 116, 117)] <- masterdf$avg.bd[c(244)]
+masterdf$pct.m[c(115, 116, 117)] <- masterdf$pct.m[c(244)]
+
+masterdf[masterdf$site=='134X', ]
+```
+
+Check 135J
+```{ r }
+masterdf[masterdf$site=='135J', ]
+
+masterdf$mean.c.pre[c(118, 119, 120)] <- mean(masterdf$mean.c.pre[c(118, 247)])
+masterdf$mean.n.pre[c(118, 119, 120)] <- mean(masterdf$mean.n.pre[c(118, 247)])
+masterdf$mean.c.post[c(118, 119, 120)] <- mean(masterdf$mean.c.post[c(118, 247)])
+masterdf$mean.n.post[c(118, 119, 120)] <- mean(masterdf$mean.n.post[c(118, 247)])
+masterdf$mean.pct.mass.loss[c(118, 119, 120)] <- mean(masterdf$mean.pct.mass.loss[c(118, 247)])
+
+masterdf$mean.ph[c(118, 119, 120)] <- masterdf$mean.ph[c(247)]
+masterdf$avg.bd[c(118, 119, 120)] <- masterdf$avg.bd[c(247)]
+masterdf$pct.m[c(118, 119, 120)] <- masterdf$pct.m[c(247)]
+
+masterdf[masterdf$site=='135J', ]
+```
+
+Check 156Q
+```{ r }
+masterdf[masterdf$site=='156Q', ]
+#not present in fractionation sample
+```
+
+Check 159L
+```{ r }
+masterdf[masterdf$site=='159L', ]
+
+masterdf$mean.ph[c(164, 165, 166)] <- masterdf$mean.ph[c(265)]
+masterdf$avg.bd[c(164, 165, 166)] <- masterdf$avg.bd[c(265)]
+masterdf$pct.m[c(164, 165, 166)] <- masterdf$pct.m[c(265)]
+
+masterdf[masterdf$site=='159L', ]
+```
+
+Check160D
+```{ r }
+masterdf[masterdf$site=='160D', ]
+#not present in fractionation sample
+```
+
+
+Save the masterdf dataframe
+```{ r }
+write.csv(masterdf, file = "masterdf.csv", row.names = FALSE)
+```
+
+
+Remove the extra rows
+```{ r }
+#find the rows that are just the bulk soil sample
+View(masterdf)
+
+#Drop extra rows
+masterdf.complete.cases <- masterdf[-c(188, 189, 192, 193, 199, 200, 203, 204, 214, 217, 218, 221, 224, 231, 240, 241, 244, 247, 262, 263, 265, 266), ] 
+
+View(masterdf.complete.cases)
+#good
+```
+
+
+Check for missing values
+```{ r }
+summary(masterdf.complete.cases)
+
+#4 rows with missing species, check those
+masterdf.complete.cases[masterdf.complete.cases$site=="157G", ]
+#row 205 = populus
+masterdf.complete.cases[masterdf.complete.cases$site=="126F", ] 
+#rows 194 & 280 = picea
+masterdf.complete.cases[masterdf.complete.cases$site=="131N1", ] 
+#row 220 = fagus
+
+#replacing these by hand, I'm so frustrated by the R code right now. 
+write.csv(masterdf.complete.cases, file = "masterdf.complete.csv", row.names=FALSE)
+```
+
+Replace missing species values by hand.
+
+Read in the 'fixed' dataframe
+```{ r }
+master <- read.csv("masterdf.complete.csv", header = TRUE)
+summary(master)
+master$depth <- as.factor(master$depth)
+```
+
+
+Now all of the species are accounted for, but some of the litter values are missing because I joined these dataframes before fixing the species issue. Go ahead and fill these in with the correct values
+```{ r }
+master[master$site=='157G', ]
+
+master$litter.pct.n[c(197)] <- master$litter.pct.n[c(135)]
+master$litter.pct.c[c(197)] <- master$litter.pct.c[c(135)]
+master$litter.lignin.mg.g[c(197)] <- master$litter.lignin.mg.g[c(135)]
+master$litter.cell.mg.g[c(197)] <- master$litter.cell.mg.g[c(135)]
+master$litter.hwec.ppm[c(197)] <- master$litter.hwec.ppm[c(135)]
+
+master[master$site=='157G', ]
+```
+
+
+```{ r }
+master[master$site=='126F', ]
+
+master$litter.pct.n[c(190, 258)] <- master$litter.pct.n[c(15)]
+master$litter.pct.c[c(190, 258)] <- master$litter.pct.c[c(15)]
+master$litter.lignin.mg.g[c(190, 258)] <- master$litter.lignin.mg.g[c(15)]
+master$litter.cell.mg.g[c(190, 258)] <- master$litter.cell.mg.g[c(15)]
+master$litter.hwec.ppm[c(190, 258)] <- master$litter.hwec.ppm[c(15)]
+
+master[master$site=='126F', ]
+```
+
+
+```{ r }
+master[master$site=='131N1', ]
+
+master$litter.pct.n[c(209)] <- master$litter.pct.n[c(208)]
+master$litter.pct.c[c(209)] <- master$litter.pct.c[c(208)]
+master$litter.lignin.mg.g[c(209)] <- master$litter.lignin.mg.g[c(208)]
+master$litter.cell.mg.g[c(209)] <- master$litter.cell.mg.g[c(208)]
+master$litter.hwec.ppm[c(209)] <- master$litter.hwec.ppm[c(208)]
+
+master[master$site=='131N1', ]
+```
+
+
+Check df
+```{r}
+summary(master)
+```
+
+All of the litter NAs are gone, all of the species NAs are gone, the rest are either missing values (ie not recorded) or are from depths 3 and 4, where there is no fractionation data. 
+
+Add the NO3 and NH4 data
+```{ r }
+no3nh4<-read.csv2("no4_no3_bulk_field_data.csv", header=TRUE)
+summary(no3nh4)
+
+#get rid of extra rows
+no3nh4 <- no3nh4[ , 1:6]
+summary(no3nh4)
+
+no3nh4$depth <- as.factor(no3nh4$depth)
+summary(no3nh4)
+
+#get rid of the cup nr and depth_cm
+no3nh4 <- no3nh4[ , c(1,3,5,6)]
+summary(no3nh4)
+```
+
+Combine with the master df
+```{ r }
+#check levels of no3nh4$site and levels of master$site
+levels(master$site)
+levels(no3nh4$site)
+#mismatches on:
+#  127G (only in no3nh4 data);
+#  130Q1 (called 130Qin no3nh4);
+#  130T2 (called 130T in no3nh4);
+#  131N1 & 131N2 (called 130T in no3nh4);
+#  131V1 & 131V2 (missing in no3nh4);
+#  132Q (called 131Q in no3nh4);
+#  
+
+master.with.no3 <- full_join()
+```
+
+## NOPE
+
+Not going to add this because it's hopelessly mislabeled. There's no way to tell which label goes with which sample. Thanks, Rob.
+
+
+Add the npoc data to this
+```{ r }
+npoc <- read.csv("npoc_hhout.csv", header=TRUE)
+summary(npoc)
+npoc$depth <- as.factor(npoc$depth)
+```
+
+Subset out the columns I want (depth, site, species, npoc)
+```{ r }
+npoc.sub <- npoc[ ,c(2,3,4,7)]
+summary(npoc.sub)
+#View(npoc.sub)
+
+#take out the control samples
+npoc.sub <- na.omit(npoc.sub)
+summary(npoc.sub)
+
+#subset out the control data
+#newiris <- subset(iris, iris$Species != "virginica", drop = TRUE)
+npoc.sub <- subset(npoc.sub, npoc.sub$species != "control", drop = TRUE)
+npoc.sub$species <- droplevels(npoc.sub$species)
+
+summary(npoc.sub)
+levels(npoc.sub$species)
+```
+
+Combine the npoc data with the master data frame
+```{ r }
+library(dplyr)
+#check levels
+levels(npoc.sub$site)
+levels(master$site)
+
+#do a full join
+join4 <- full_join(master, npoc.sub)
+summary(join4)
+
+#make site and depth factors again
+join4$site <- as.factor(join4$site)
+join4$depth <- as.factor(join4$depth)
+
+#add the units to the npoc variable
+join4 <- 
+  join4 %>% rename(npoc.mg.L = npoc)
+
+summary(join4)
+```
+
+
+Save the combined dataframe
+```{ r}
+write.csv(join4, file = "hhout_master.csv", row.names = FALSE)
+```
+
+Remove the extra/duplicated variables
+```{ r}
+library(dplyr)
+#read in the dataframe
+hhout <- read.csv("hhout_master.csv", header=TRUE)
+
+#drop the fraction.id variable, not needed
+hhout <- select(hhout, -"fraction.id")
+names(hhout)
+
+#drop 'sample' - not needed since it duplicates the information in 'site'
+hhout <- select(hhout, -"sample")
+names(hhout)
+
+#check that totwt and org.c.fraction.mass.sum are the same, then drop org.c.bulk.wt
+all.equal(hhout$totwt, hhout$org.c.fraction.mass.sum)
+#true, drop totwt
+hhout <- select(hhout, -"totwt")
+names(hhout)
+
+#rename org.c.bulk.wt to org.c.mass.bulk 
+hhout <- rename(hhout, org.c.mass.bulk = org.c.bulk.wt)
+names(hhout)
+
+#drop n, not relevant for data analysis
+hhout <- select(hhout, -"n")
+names(hhout)
+
+```
+
+
+save the updated dataframe
+```{ r}
+hhout_master_drop <- write.csv(hhout, file = "hhout_master_drop.csv", row.names = FALSE)
+```
+
+
+All duplicated/unnecessary rows have been removed. Now rename the non-informative variable names to make them more transparent.
+```{ r }
+#read in the updated dataframe
+hhout <- read.csv("hhout_master_drop.csv", header=TRUE)
+
+#1-4 are ok
+#5-9 add 'fraction' at the end
+names(hhout)[names(hhout) == "pct.n.pre.ashing"] <- "pct.n.pre.ashing.fraction" 
+  
+names(hhout)[names(hhout) == "pct.n.post.ashing"] <- "pct.n.post.ashing.fraction" 
+
+names(hhout)[names(hhout) == "pct.c.pre.ashing"] <- "pct.c.pre.ashing.fraction" 
+
+names(hhout)[names(hhout) == "pct.c.post.ashing"] <- "pct.c.post.ashing.fraction" 
+
+names(hhout)
+
+names(hhout)[names(hhout)== "pct.mass.loss"] <- "pct.mass.loss.fraction"
+
+names(hhout)
+
+#10-13 add pct to indicate these are percentages
+names(hhout)[names(hhout) == "c.in.org.fract"] <- "pct.c.in.org.fraction" 
+
+names(hhout)[names(hhout) == "n.in.org.fract"] <- "pct.n.in.org.fraction" 
+
+names(hhout)[names(hhout) == "org.c.in.t.frac"] <- "pct.c.in.whole.fraction" 
+
+names(hhout)[names(hhout) == "org.n.in.t.frac"] <- "pct.n.in.whole.fraction" 
+
+names(hhout)
+
+#15-18 change to 'pct' and 'pre' vs 'post' ashing 'bulk'
+names(hhout)[names(hhout) == "mean.c.pre"] <- "pct.c.pre.ashing.bulk" 
+
+names(hhout)[names(hhout) == "mean.c.post"] <- "pct.c.post.ashing.bulk" 
+
+names(hhout)[names(hhout) == "mean.n.pre"] <- "pct.n.pre.ashing.bulk" 
+
+names(hhout)[names(hhout) == "mean.n.post"] <- "pct.n.post.ashing.bulk" 
+
+names(hhout)
+
+#19-23
+names(hhout)[names(hhout) == "mean.pct.mass.loss"] <- "pct.mass.loss.bulk" 
+
+names(hhout)[names(hhout) == "c.in.org.fraction.bulk"] <- "pct.c.in.org.fraction.bulk" 
+
+names(hhout)[names(hhout) == "org.n.in.total.bulk"] <- "pct.n.in.total.bulk" 
+
+names(hhout)[names(hhout) == "n.in.org.fraction.bulk"] <- "pct.n.in.org.fraction.bulk" 
+
+names(hhout)
+
+#24-27 change 'weight' to 'mass' for accuracy 
+names(hhout)[names(hhout) == "soil.start.wt"] <- "soil.mass.pre.fract" 
+
+names(hhout)[names(hhout)=="weight.g"] <- "fraction.mass"
+
+names(hhout)[names(hhout)=="orgc.weight"] <- "org.c.mass.fraction"
+
+names(hhout)[names(hhout)=="pct.c.cont.by.fraction"] <- "pct.c.in.fraction"
+
+names(hhout)
+
+
+#28-31 specify bulk or fraction, change 'wt' to 'mass', 37-38 rewrite, 45 add 'soil'
+names(hhout)[names(hhout)=="org.c.start.mass"] <- "org.c.start.mass.bulk"
+
+names(hhout)[names(hhout)=="orc.c.fraction.mass"] <- "org.c.mass.fraction"
+
+names(hhout)[names(hhout)=="soil.final.wt"] <- "soil.mass.sum.fractions"
+
+names(hhout)[names(hhout)=="org.c.fraction.mass.sum"] <- "sum.org.c.mass.fraction"
+
+names(hhout)
+
+names(hhout)[names(hhout)=="mean.ph"] <- "soil.ph"
+
+names(hhout)[names(hhout)=="avg.bd"] <- "bulk.dens"
+
+names(hhout)[names(hhout)=="npoc.mg.L"] <- "soil.npoc.mg.L"
+
+names(hhout)
+```
+
+
+Save the updated data frame
+```{ r}
+write.csv(hhout, file = "hhout_master_17Mar2020", row.names = FALSE)
+```
+
+
+Read in and check the updated data frame
+```{ r }
+hhout <- read.csv("hhout_master_17Mar2020", header=TRUE)
+names(hhout)
+summary(hhout)
+
+#make depth a factor
+hhout$depth = as.factor(hhout$depth)
+```
+
+Everything looks good!
+
+I will keep the CUE data separate since it only applies to the top layer of the soil data.

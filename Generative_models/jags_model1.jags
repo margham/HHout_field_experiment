@@ -1,0 +1,17 @@
+model{
+  for(i in 1:N){
+    p[i] ~ dbeta(mu*phi, (1-mu)*phi)
+    real.p[i] ~ dbeta(p[i]*prec,(1 - p[i])*prec) 
+    
+    
+    fake.data[i,2] ~ dnorm(fake.data[i,1] * real.p[i], weigh.error.org)
+    fake.data[i,3] ~ dnorm( fake.data[i,1] * (1-real.p[i]), weigh.error.inorg)
+  }
+  
+  mu ~ dbeta(1,1)
+  phi ~ dgamma(0.1,0.1)
+  prec ~ dgamma(0.1,0.1)
+  weigh.error.org ~ dgamma(0.1,0.1)
+  weigh.error.inorg ~ dgamma(0.1,0.1)
+}
+  

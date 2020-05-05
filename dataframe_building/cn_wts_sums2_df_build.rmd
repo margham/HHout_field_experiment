@@ -1,0 +1,154 @@
+---
+title: "CN_wts_sums2_dataframe"
+author: "Becca"
+date: "10-7-2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Make a dataframe retaining the structure of the relationships we expect among variables.
+
+Load libraries
+```{r}
+library(tidyverse)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+```
+
+Start by looking at the real data to generate hypothesized relationships
+```{ r }
+#first, load the cn data that we already have to generate data from 
+cn.real.data<-read.csv("organic.c.values.csv", header=TRUE)
+summary(cn.real.data)
+cn.real.data$depth = as.factor(cn.real.data$depth)
+
+
+carbon.plot.sp<-read.csv("carbon.plot.sp.csv", header=TRUE)
+summary(carbon.plot.sp)
+carbon.plot.sp$depth = as.factor(carbon.plot.sp$depth)
+#get rid of the first two columns in the carbon.plot.sp dataframe
+carbon.plot.sp<-carbon.plot.sp[ ,-c(1,2)]
+summary(carbon.plot.sp)
+
+#join the dataframes
+cn.real.dat2<-join(cn.real.data, carbon.plot.sp, type="left")
+summary(cn.real.dat2)
+#totwt didn't work, delete it
+cn.real.dat2<-cn.real.dat2[ ,-c(1,13)]
+summary(cn.real.dat2)
+
+#remake the carbon totwt variable
+#lots of totwts missing. Redo this value
+c.totwt<-aggregate(orgc.weight ~ site + depth, cn.real.dat2, sum) #total mass of organic C by site and depth
+c.totwt$totwt<-c.totwt$orgc.weight
+c.totwt<-c.totwt[,-(3)]
+cn.real.dat3<-join(cn.real.dat2, c.totwt, type="left")
+summary(cn.real.dat3)
+#great. 
+#Now make a sum-of-fractions variable
+c.sums<-aggregate(weight.g ~ site + depth, cn.real.dat3, sum)
+c.sums$final.wt<-c.sums$weight.g
+c.sums<-c.sums[,-(3)]
+cn.real.dat4<-join(cn.real.dat3, c.sums, type="left")
+summary(cn.real.dat4)
+#worked.
+
+#get information on parameters of interest
+summary(cn.real.dat2$soil.start.wt) #mean 10.47, min 10.02, max 11.45
+hist(cn.real.dat2$org.c.in.t.frac, freq=FALSE) #bimodal, big weight btwn 0-5%, another peak ~25-30%
+summary(cn.real.dat4$final.wt) #mean 10.550, min 7.876, max=11.791
+summary(cn.real.dat4$totwt) #mean 0.476, min 0.1803, max 0.931
+```
+
+
+Get the data for the organic and inorganic C and N. 
+```{ r }
+cn.wts.sums<-read.csv("cn.wts.sums.csv", header=TRUE)
+summary(cn.wts.sums)
+cn.wts.sums$depth = as.factor(cn.wts.sums$depth)
+#calculate starting c mass
+cn.wts.sums$org.c.start.mass<-(cn.wts.sums$org.c.in.total.bulk/100)*cn.wts.sums$soil.start.wt #is this a valid way to measure this? Maybe we should correct for the change in soil weight from start to finish. 
+
+#calculate c mass by fraction 
+cn.wts.sums$org.c.fraction.mass<-(cn.wts.sums$weight.g*(cn.wts.sums$org.c.in.t.frac/100))
+
+#calculate final (sum of fractions) c mass
+cn.wts.sub <- cn.wts.sums %>%
+  dplyr::group_by(site, depth, species) %>%
+  dplyr::summarize(soil.final.wt = sum(weight.g),
+            org.c.fraction.mass.sum = sum(org.c.fraction.mass), 
+            )
+summary(cn.wts.sub)
+
+#try joining back with the main dataframe
+cn.wts.sums2 <- join(cn.wts.sums, cn.wts.sub, type="left")
+summary(cn.wts.sums2)
+all.equal(cn.wts.sums2$totwt, cn.wts.sums2$org.c.fraction.mass.sum)
+
+cn.wts.sums2$species<-mapvalues(cn.wts.sums2$species, from=c("picea_sit", "picea_ab"), to=c("picea", "picea"))
+```
+
+
+check out parameter values.
+```{r}
+summary(cn.wts.sums2$org.c.in.t.frac) #organic c pct. by fraction
+summary(cn.wts.sums2$totwt) #eqal to org.c.fraction.mass.sum. 
+hist(cn.wts.sums2$totwt) #Bimodal: peak between 0.2 and 0.4, another peak between 0.6 and 0.7
+summary(cn.wts.sums2$orgc.weight) #weight of organic c per fraction
+```
+
+
+Translate % inorganic C to an inorganic C mass per fraction, and % inorganic C in bulk sample to inorganic C mass. Then plot the data.
+```{r }
+#inorganic fractions
+cn.wts.sums2$inorg.c.mass.frac<-(cn.wts.sums2$pct.c.post.ashing/100)*(cn.wts.sums2$weight.g-((cn.wts.sums2$pct.mass.loss/100)*cn.wts.sums2$weight.g))
+
+
+(inorg.c.frac<-ggplot(cn.wts.sums2, aes(x=species, y=inorg.c.mass.frac)) +
+    geom_point()+
+    geom_boxplot(alpha=0.3) +
+    facet_grid(vars(depth), vars(fraction.code))+
+    ylab("Inorganic C mass (g) by fraction and depth"))
+
+#inorganic bulk
+cn.wts.sums2$inorg.c.mass.bulk<-(cn.wts.sums2$mean.c.post/100)*cn.wts.sums2$soil.start.wt
+
+(inorg.c.bulk<-ggplot(cn.wts.sums2, aes(x=species, y=inorg.c.mass.bulk)) +
+    geom_point()+
+    geom_boxplot(alpha=0.3) +
+    facet_wrap(~depth) +
+    ylab("Inorganic C mass (g) by species and depth"))
+```
+
+
+Plot the organic C data. 
+```{r}
+
+(hist.orgc<-hist(cn.wts.sums2$orgc.weight))
+
+(orgc.plot.fraction<-ggplot(cn.wts.sums2, aes(x=species, y=orgc.weight)) +
+                   geom_point(color=cn.wts.sums2$depth) +
+                   geom_boxplot(alpha=0.3) +
+                   facet_grid(vars(depth), vars(fraction.code))+
+                   ylab("organic C mass (g) by fraction and depth"))
+
+cn.wts.sums2$org.c.bulk.wt<-(cn.wts.sums2$org.c.in.total.bulk/100)*cn.wts.sums2$soil.start.wt
+
+(hist.orgc.bulk<-hist(cn.wts.sums2$org.c.bulk.wt))
+
+(org.c.plot.bulk<-ggplot(cn.wts.sums2, aes(x=species, y=org.c.bulk.wt)) +
+                      geom_point(color=cn.wts.sums2$depth) +
+                      geom_boxplot(alpha=0.3) +
+                      facet_wrap(~depth) +
+                      ylab("Organic C mass (g) in bulk sample by depth"))
+```
+
+
+Save the cn.wts.sums2 dataframe
+```{r}
+write.csv(cn.wts.sums2, file = "cn.wts.sums2.csv")
+```

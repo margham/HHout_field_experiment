@@ -1,0 +1,138 @@
+---
+title: "CN_Ratios"
+author: "Becca"
+date: "11-7-2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Script to reproduce CN ratios of soil samples (fractions for depths 1 and 2, bulk for depths 3-4)
+
+###Data and libraries
+```{r }
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+cn.wts.sums <- read.csv("cn.wts.sums.csv", header=TRUE)
+#correct read-in errors
+summary(cn.wts.sums)
+cn.wts.sums <- cn.wts.sums[,-c(1,2)]
+cn.wts.sums$depth = as.factor(cn.wts.sums$depth)
+#check dataframe again
+summary(cn.wts.sums)
+```
+
+
+###CN ratios
+
+Check the CN ratios for pre and post-ashing bulk samples. 
+```{r }
+cn.ratios.bulk <- cn.wts.sums
+
+cn.ratios.bulk$cn.pre.bulk <- cn.ratios.bulk$mean.c.pre/cn.ratios.bulk$mean.n.pre  
+cn.ratios.bulk$cn.post.bulk <- cn.ratios.bulk$mean.c.post/cn.ratios.bulk$mean.n.post
+
+(ratioplot.pre<-ggplot(cn.ratios.bulk, aes(x=species, y=cn.pre.bulk)) +
+    geom_point() +
+    facet_wrap(~depth))
+ratioplot.pre
+
+ratioplot.post<-ggplot(cn.ratios.bulk, aes(x=species, y=cn.post.bulk)) + 
+    geom_point() +
+    facet_wrap(~depth)
+ratioplot.post
+```
+
+CN ratios pre-ashing bulk appear in the normal range for soil. Post-ashing, they are extremely high, likely because nearly all of the N was lost to volatilization during combustion. 
+
+**Now check CN ratios for each fraction pre-and-post ashing**
+
+```{r }
+#make the pom dataframe
+cn.ratios.pom <- subset(cn.wts.sums, fraction.code %in% 'pom')
+    cn.ratios.pom$cn.pre = (cn.ratios.pom$pct.c.pre.ashing/cn.ratios.pom$pct.n.pre.ashing) 
+    cn.ratios.pom$cn.post = (cn.ratios.pom$pct.c.post.ashing/cn.ratios.pom$pct.n.post.ashing) 
+    cn.ratios.pom$cn.org = (cn.ratios.pom$org.c.in.t.frac/cn.ratios.pom$org.n.in.t.frac)
+```
+
+
+Plot the cn ratios for the pom pre, post, and organic
+```{r }
+(ratioplot.pre.pom<-ggplot(cn.ratios.pom, aes(x=species, y=cn.pre)) +
+    geom_point() +
+    facet_wrap(~depth))
+ratioplot.pre.pom
+
+ratioplot.post.pom<-ggplot(cn.ratios.pom, aes(x=species, y=cn.post)) + 
+    geom_point() +
+    facet_wrap(~depth)
+ratioplot.post.pom
+
+ratioplot.organic.pom <- ggplot(cn.ratios.pom, aes(x=species, y=cn.org)) +
+    geom_point() +
+    facet_wrap(~depth)
+ratioplot.organic.pom
+```
+
+
+Make the sa dataframe
+```{r results="hide"}
+cn.ratios.sa <- subset(cn.wts.sums, fraction.code %in% 'sa')
+    cn.ratios.sa$cn.pre = (cn.ratios.sa$pct.c.pre.ashing/cn.ratios.sa$pct.n.pre.ashing) 
+    cn.ratios.sa$cn.post = (cn.ratios.sa$pct.c.post.ashing/cn.ratios.sa$pct.n.post.ashing) 
+    cn.ratios.sa$cn.org = (cn.ratios.sa$org.c.in.t.frac/cn.ratios.sa$org.n.in.t.frac)
+```
+
+Plot the cn ratios for the sa pre, post, and organic
+```{r }
+ratioplot.pre.sa<-ggplot(cn.ratios.sa, aes(x=species, y=cn.pre)) +
+    geom_point() +
+    facet_wrap(~depth)
+ratioplot.pre.sa
+
+ratioplot.post.sa<-ggplot(cn.ratios.sa, aes(x=species, y=cn.post)) + 
+    geom_point() +
+    facet_wrap(~depth)
+ratioplot.post.sa
+
+ratioplot.organic.sa <- ggplot(cn.ratios.sa, aes(x=species, y=cn.org)) +
+    geom_point() +
+    facet_wrap(~depth)
+ratioplot.organic.sa
+```
+
+
+Make the sc dataframe
+```{r results="hide"}
+cn.ratios.sc <- subset(cn.wts.sums, fraction.code %in% 'sc')
+    cn.ratios.sc$cn.pre = (cn.ratios.sc$pct.c.pre.ashing/cn.ratios.sc$pct.n.pre.ashing) 
+    cn.ratios.sc$cn.post = (cn.ratios.sc$pct.c.post.ashing/cn.ratios.sc$pct.n.post.ashing) 
+    cn.ratios.sc$cn.org = (cn.ratios.sc$org.c.in.t.frac/cn.ratios.sc$org.n.in.t.frac)
+```
+
+
+Plot the cn ratios for the sc pre, post, and organic
+```{r }
+ratioplot.pre.sc<-ggplot(cn.ratios.sc, aes(x=species, y=cn.pre)) +
+    geom_point() +
+    facet_wrap(~depth)
+ratioplot.pre.sc
+
+ratioplot.post.sc<-ggplot(cn.ratios.sc, aes(x=species, y=cn.post)) + 
+    geom_point() +
+    facet_wrap(~depth)
+ratioplot.post.sc
+
+ratioplot.organic.sc <- ggplot(cn.ratios.sc, aes(x=species, y=cn.org)) +
+    geom_point() +
+    facet_wrap(~depth)
+ratioplot.organic.sc
+```
+
+**The CN ratios are quite consistend despite large variation in actual values. Maybe this means that the problem isn't in the measurements but somewhere else??**
+

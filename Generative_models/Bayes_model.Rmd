@@ -1,0 +1,193 @@
+---
+title: "Bayes_soil_C"
+author: "Becca"
+date: "10-5-2019"
+output: pdf_document
+  toc: true
+editor_options: 
+  chunk_output_type: console
+---
+
+#Bayesian modeling to constrain inorganic variance. 
+
+The goal of this process is to constrain the range of inorganic C loss to within a plausible range. At the moment, an underestimation of inorganic C post ashing is leading to over-estimation of soil C content.  
+
+##Describing the model
+
+Model : We expect the output, inorganic C loss, to be a gamma-distributed (or other right-skewed distribution) with a lower limit of 0 and upper limit of 1 (100% mass loss).
+      : The 
+
+**Load required libraries
+```{r }
+#libraries
+library(rstanarm)
+library(brms)
+library(bayesplot)
+library(ggplot2)
+#library(plyr)
+library(dplyr)
+library(tidybayes)
+library(modelr)
+
+```
+
+
+**Make the data set that will be read into the model**
+```{r }
+c_data <- read.csv("cn.wts.sums.csv")
+summary(c_data)
+c_data$depth <- as.factor(c_data$depth)
+
+#select just the relevant parameters
+c_model_data <- subset(c_data, select = c(site, depth, fraction.code, mean.c.pre, mean.c.post, pct.c.pre.ashing, pct.c.post.ashing, weight.g, soil.start.wt, mean.pct.mass.loss, pct.mass.loss))
+summary(c_model_data)
+#c_model_data$depth <- as.factor(c_model_data$depth)
+
+#calculate the bulk total c mass pre- and post- ashing and the sum of fractions total c mass pre- and post-ashing
+#####AGGREGATE#EXAMPLE###############
+# soil.loss.df1<-soil.loss.df %>% 
+#   group_by(site, depth, species) %>%
+#   summarize(
+#     soil.start.wt = mean(soil.start.wt),
+#     weight.g = sum(weight.g)) 
+# soil.loss.df1
+####################################
+
+#summarize into the parameters relevant for this model
+cmod_dat<-c_model_data %>%
+  group_by(site, depth) %>%
+  summarize(
+    bulk.c.start.g = mean((mean.c.pre/100) * soil.start.wt), 
+    bulk.c.end.g = mean((mean.c.post/100) * (soil.start.wt - (soil.start.wt*(mean.pct.mass.loss/100)))), 
+    frac.mass.start.g = sum(weight.g),
+    frac.mass.end.g = sum(weight.g - (weight.g*(pct.mass.loss/100))),
+    bulk.pct.mass.loss = mean(mean.pct.mass.loss),
+    frac.pct.mass.loss = mean(100 - ((frac.mass.end.g/frac.mass.start.g)*100)),
+    frac.c.start.g = sum((pct.c.pre.ashing/100)*weight.g),
+    frac.c.end.g = sum((pct.c.post.ashing/100)*(weight.g-(weight.g*(pct.mass.loss/100))))
+  )
+summary(cmod_dat)
+
+#standardize variables
+library(psycho)
+
+z_cmod_dat <- data.frame(
+    z_bulk.c.end.g = standardize(cmod_dat$bulk.c.end.g),
+    z_bulk.c.start.g = standardize(cmod_dat$bulk.c.start.g),
+    z_frac.mass.start.g = standardize(cmod_dat$frac.mass.start.g),
+    z_frac.mass.end.g = standardize(cmod_dat$frac.mass.end.g),
+    z_frac.pct.mass.loss = standardize(cmod_dat$frac.pct.mass.loss),
+    z_frac.c.start.g = standardize(cmod_dat$frac.c.start.g),
+    z_frac.c.end.g = standardize(cmod_dat$frac.c.end.g),
+    z_bulk.pct.mass.loss = standardize(cmod_dat$bulk.pct.mass.loss),
+    z.site = as.factor(cmod_dat$site),
+    z.depth = as.factor(cmod_dat$depth) 
+)
+
+#check that it worked
+summary(z_cmod_dat)
+```
+
+
+Look at the distribution of our output variable (post-ashing sum of fractions C)
+```{r }
+(hist<-ggplot(z_cmod_dat, aes(x=z_frac.c.end.g)) +
+  geom_histogram() +
+  theme_classic())
+```
+
+##Fit the model (I am using brms here as it is a nice interface between R - which I understand - and Stan, which I do not).
+
+**Set priors**
+```{r}
+#see what we can set priors for
+get_prior(z_frac.c.end.g ~ z_bulk.c.start.g + z_bulk.c.end.g + z_frac.c.start.g + (1|z.depth), data = z_cmod_dat)
+#We can set priors for bulk.c.end.g, bulk.c.start.g, frac.c.start.g
+#currently there are no priors set for these coefficients
+#
+prior1 <- c(set_prior("beta(5, 5)", class = "b", coef = "z_bulk.c.start.g"), 
+            set_prior("beta(7.5, 5)", class = "b", coef = "z_bulk.c.end.g"), 
+            set_prior("beta(7.5, 5)", class = "b", coef = "z_frac.c.start.g"))
+```
+
+**Specify model**
+```{r}
+cmod_brms <- brm(z_frac.c.end.g ~ z_bulk.c.start.g + z_bulk.c.end.g + z_frac.c.start.g + (1|z.depth), data=z_cmod_dat, prior = prior1, iter = 1000, chains = 4, cores = 2)
+```
+
+**View output**
+```{r }
+summary(cmod_brms)
+```
+
+**check model fit**
+```{r }
+model_fit<- z_cmod_dat %>%
+   data_grid(z_frac.c.start.g = seq_range(z_frac.c.start.g, n=100), z_bulk.c.end.g = z_bulk.c.end.g, z_bulk.c.start.g=z_bulk.c.start.g, z.depth=z.depth)%>%
+   add_predicted_draws(cmod_brms)%>%
+   ggplot(aes(x=z_frac.c.start.g, y=z_frac.c.end.g)) +
+   stat_lineribbon(aes(y=.prediction), .width=c(.95, .89, .50),
+                   alpha=1/2, colour = "black") + 
+   geom_point(data=z_cmod_dat, colour = "darkseagreen4", size = 3) +
+   scale_fill_brewer(palette="Greys")
+model_fit
+#check model convergence
+plot(cmod_brms, plotfun = "trace")
+```
+
+##Posterior Predictive Checks
+
+The compiled rstanarm models include a y_rep variable in the generated quantiles block (posterior distributions). We can use the pp_check function to see how model predictions compare to the raw data.
+```{r }
+pp_check(cmod_brms, plotfun="stat", stat = "mean")
+pp_check(cmod_brms, plotfun = "dens_overlay")
+```
+
+
+##Try on un-standardized data
+```{r }
+#get priors
+get_prior(frac.c.end.g ~ bulk.c.start.g + bulk.c.end.g + frac.c.start.g + (1|depth), data=cmod_dat)
+
+#priors
+prior2 <- c(set_prior("beta(0.01, 0.005)", class = "b", coef = "bulk.c.start.g"), 
+            set_prior("beta(0.02, 0.015)", class = "b", coef = "bulk.c.end.g"), 
+            set_prior("beta(0.02, 0.01)", class = "b", coef = "frac.c.start.g"))
+
+#model
+cmod_brms2 <- brm(frac.c.end.g ~ bulk.c.start.g + bulk.c.end.g + frac.c.start.g + (1|depth), data=cmod_dat, family=Gamma(), prior = prior2, iter = 1000, chains = 4, cores = 2)
+
+#model output
+summary(cmod_brms2)
+```
+
+
+**check model fit**
+```{r }
+model_fit2 <- cmod_dat %>%
+   data_grid(frac.start = seq_range(frac.c.start.g, n=100))%>%
+   add_predicted_draws(cmod_brms2)%>%
+   ggplot(aes(x=site, y=frac.c.end.g)) +
+   stat_lineribbon(aes(y=.prediction), .width=c(.95, .89, .50),
+                   alpha=1/2, colour = "black") + 
+   geom_point(data=cmod_dat, colour = "darkseagreen4", size = 3) +
+   scale_fill_brewer(palette="Greys")
+model_fit2
+#check model convergence
+plot(cmod_brms2, plotfun = "trace")
+```
+
+##Posterior Predictive Checks
+```{r }
+pp_check(cmod_brms2, plotfun="stat", stat = "mean")
+pp_check(cmod_brms2, plotfun = "dens_overlay")
+```
+
+Check priors
+```{r }
+prior_summary(cmod_brms)
+```
+
+#Using predicted inorganic C values:
+
+Once we think we have a good constrained prediction for inorganic C values we can 

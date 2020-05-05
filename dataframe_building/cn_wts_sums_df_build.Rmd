@@ -1,0 +1,214 @@
+---
+title: "cn_wts_sums_df_build"
+author: "Becca"
+date: "10-7-2019"
+output: html_document
+---
+
+This script shouldn't need to be used anymore, is strictly for archival purposes. 
+
+
+1. Load data, clean and combine dataframes (code not included)
+
+1.1 Load data and libraries
+```{r include=FALSE}
+#libraries
+library(tidyverse)
+#library(plyr)
+library(ggplot2)
+library(ggtern)
+library(DirichletReg)
+library(magrittr)
+library(stats)
+library(lme4)
+```
+
+1.2 Clean up the data frames
+```{r include=FALSE}
+#Fraction data
+cn.fractions.all<-read.csv2("fractions_cn_all.csv", dec=".")
+summary(cn.fractions.all)
+cn.fractions.all$depth<-as.factor(cn.fractions.all$depth)
+
+#Bulk data
+cn.dat.all<-read.csv("combined.data.cn.csv", dec=".")
+summary(cn.dat.all)
+#subset out just depths 1 and 2
+cn.dat.all<-subset(cn.dat.all, depth%in%c(1,2))
+#first, there is an outlier in depth==2, see what this is. 
+#second, remove the 'na' points. 
+cn.dat.all<-cn.dat.all[!is.na(cn.dat.all$mean.c.pre),]
+cn.dat.all<-cn.dat.all[!is.na(cn.dat.all$mean.c.pre),]
+#the outlier is 131N2, with a mean.c.post of 8.89, which seems crazy. I will remove this observation for now.
+cn.dat.all <- cn.dat.all[!is.na(cn.dat.all$mean.c.post),]
+cn.dat.all <-cn.dat.all[!(cn.dat.all$mean.c.post>3),]
+#The average bd is also extremely high, which suggests to me that something is going on here that is very wrong. 
+#Okay, so the problem is that the average bd is the same as the ph. I will fix this later but for now am not going to worry about the bd.
+cn.dat.all$depth <- cn.dat.all$depth[,drop=TRUE]
+#cn.dat.all$species<-mapvalues(cn.dat.all$species, from="picea", to="picea_ab")
+cn.dat.all$depth<-as.factor(cn.dat.all$depth)
+summary(cn.dat.all)
+
+#add dummy variables
+cn.dat.all$fraction.sc <- "sc"
+cn.dat.all$fraction.pom <- "pom"
+cn.dat.all$fraction.sa <- "sa"
+
+cn.dat.all$fraction.sc <- as.factor(cn.dat.all$fraction.sc)
+cn.dat.all$fraction.pom <- as.factor(cn.dat.all$fraction.pom)
+cn.dat.all$fraction.sa <- as.factor(cn.dat.all$fraction.sa)
+
+#select only the columns we need from each data frame.
+cn.dat.sub<-select(cn.dat.all, site, depth, species, mean.c.pre, mean.n.pre, mean.c.post, mean.n.post, mean.pct.mass.loss, fraction.sc, fraction.pom, fraction.sa)
+
+cn.dat.sub2 <- gather(cn.dat.sub, key=fraction.id, value = fraction.code, -site, -depth, -species, -mean.c.pre, -mean.n.pre, -mean.c.post, -mean.n.post, -mean.pct.mass.loss) 
+
+cn.fractions.sub <- select(cn.fractions.all, site, depth, fraction.name, fraction.code, pct.n.pre.ashing, pct.c.pre.ashing, pct.n.post.ashing, pct.c.post.ashing, pct.mass.loss)
+```
+
+
+1.3 Get rid of negative values - in the case of ashing data, negatives indicate value below detection point, or ~0. 
+```{ r include=FALSE}
+#for cn.dat.sub
+#change negative C post-ashing values to 0
+c.post<-cn.dat.sub2$mean.c.post
+c.post[c.post<0] = 0
+cn.dat.sub2$mean.c.post<-c.post
+summary(cn.dat.sub2)
+#do the same for pct.c.pre.ashing and for pct.mass.loss
+c.pre<-cn.dat.sub2$mean.c.pre
+c.pre[c.pre<0] = 0
+cn.dat.sub2$mean.c.pre<-c.pre
+
+pct.loss<-cn.dat.sub2$mean.pct.mass.loss
+pct.loss[pct.loss<0] = 0
+cn.dat.sub2$mean.pct.mass.loss<-pct.loss
+
+#for cn.fractions.sub
+#change negative C post-ashing values to 0
+c.post<-cn.fractions.sub$pct.c.post.ashing
+c.post[c.post<0] = 0
+cn.fractions.sub$pct.c.post.ashing<-c.post
+summary(cn.fractions.sub)
+#do the same for pct.c.pre.ashing and for pct.mass.loss
+c.pre<-cn.fractions.sub$pct.c.pre.ashing
+c.pre[c.pre<0] = 0
+cn.fractions.sub$pct.c.pre.ashing<-c.pre
+
+pct.loss<-cn.fractions.sub$pct.mass.loss
+pct.loss[pct.loss<0] = 0
+cn.fractions.sub$pct.mass.loss<-pct.loss
+```
+
+
+2. Calculate C values
+
+Calculate the organic C for each data frame:
+```{ r }
+#for the total 
+cn.dat.sub2$c.in.org.fraction.bulk <- with(cn.dat.sub2, (mean.c.pre/100 - (mean.c.post/100)*(1 - (mean.pct.mass.loss/100)))/(mean.pct.mass.loss/100)*100)
+
+cn.dat.sub2$org.c.in.total.bulk <- with(cn.dat.sub2, (mean.c.pre/100 - (mean.c.post/100)*(1-(mean.pct.mass.loss/100)))*100)
+
+#for the fractions
+cn.fractions.sub$c.in.org.fract<-with(cn.fractions.sub, (pct.c.pre.ashing/100 - (pct.c.post.ashing/100)*(1 - (pct.mass.loss/100)))/(pct.mass.loss/100)*100)
+
+cn.fractions.sub$org.c.in.t.frac<-with(cn.fractions.sub, (pct.c.pre.ashing/100 - (pct.c.post.ashing/100)*(1-(pct.mass.loss/100)))*100)
+```
+
+
+Do the same for the N data:
+```{ r }
+#for the total 
+cn.dat.sub2$n.in.org.fraction.bulk <- with(cn.dat.sub2, (mean.n.pre/100 - (mean.n.post/100)*(1 - (mean.pct.mass.loss/100)))/(mean.pct.mass.loss/100)*100)
+
+cn.dat.sub2$org.n.in.total.bulk <- with(cn.dat.sub2, (mean.n.pre/100 - (mean.n.post/100)*(1-(mean.pct.mass.loss/100)))*100)
+
+#for the fractions
+cn.fractions.sub$n.in.org.fract<-with(cn.fractions.sub, (pct.n.pre.ashing/100 - (pct.n.post.ashing/100)*(1 - (pct.mass.loss/100)))/(pct.mass.loss/100)*100)
+
+cn.fractions.sub$org.n.in.t.frac<-with(cn.fractions.sub, (pct.n.pre.ashing/100 - (pct.n.post.ashing/100)*(1-(pct.mass.loss/100)))*100)
+```
+
+
+Combine data frames:
+```{ r results="hide"}
+cn.joined.sub<-join(cn.fractions.sub, cn.dat.sub2, type="left")
+summary(cn.joined.sub)
+
+#check that the combine worked
+all.equal(cn.joined.sub$pct.n.pre.ashing, cn.fractions.sub$pct.n.pre.ashing)
+all.equal(cn.joined.sub$pct.c.pre.ashing, cn.fractions.sub$pct.c.pre.ashing)
+#looks okay. 
+
+cn.joined.sub.drop<-drop_na(cn.joined.sub)
+summary(cn.joined.sub.drop)
+#make depth a factor
+cn.joined.sub.drop$depth<-as.factor(cn.joined.sub.drop$depth)
+#cn.joined.sub.drop$depth_cm<-as.factor(cn.joined.sub.drop$depth_cm)
+
+summary(cn.joined.sub.drop)
+#good, no more negatives. 
+```
+
+
+Load the weights data and join with cn data (not included):
+```{ r include=FALSE}
+fraction.wts<-read.csv2("fraction_wts.csv", dec=".")
+summary(fraction.wts)
+fraction.wts$depth<-as.factor(fraction.wts$depth)
+fraction.wts.drop<-drop_na(fraction.wts)
+fw<-fraction.wts.drop
+#gather by fraction
+fw<-gather(fw, key=fraction.code, value=weight.g, -depth, -site, -sample, -soil.start.wt)
+
+fw$fraction.code<-mapvalues(fw$fraction.code, from = c("silt.clay.final.wt", "pom.final.wt", "sand.agg.final.wt"), to = c("sc", "pom", "sa"))
+
+fw<-filter(fw, weight.g>=0)
+#join with cn.org1
+cn.wts<-join(cn.joined.sub.drop, fw, type="left")
+
+#check that the join worked
+all.equal(cn.joined.sub.drop$pct.c.pre.ashing, cn.wts$pct.c.pre.ashing)
+all.equal(cn.joined.sub.drop$pct.n.pre.ashing, cn.wts$pct.n.pre.ashing)
+
+cn.wts<-drop_na(cn.wts)
+summary(cn.wts)
+```
+
+
+Save the data frame (not included)
+```{ r include=FALSE}
+write.csv(cn.wts, file = "cn.wts.csv")
+```
+
+
+2. Calculate C masses for each fraction
+
+
+Multiply the percent value C by fraction mass to get total C mass within each fraction. Then, divide over the sum of fraction C to find the contribution  of each fraction to total C mass (note this is only for the solid fractions at this point):
+```{ r results="hide"}
+cn.wts<-read.csv("cn.wts.csv", header=TRUE, dec=".")
+summary(cn.wts)
+cn.wts$depth<-as.factor(cn.wts$depth)
+
+#multiply organic c percent by fraction weights
+cn.wts$orgc.weight<-((cn.wts$org.c.in.t.frac/100) * cn.wts$weight.g)
+
+#add together the values of organic c per sample, then divide by sum(orgc.weight)
+c.totwt<-aggregate(orgc.weight ~ site + depth, cn.wts, sum) #total mass of organic C by site and depth
+c.totwt$totwt<-c.totwt$orgc.weight
+c.totwt<-c.totwt[,-(3)]
+   
+cn.wts.sums<-join(cn.wts, c.totwt, type="left") #join the totwt variable to the cn.wts.sums dataframe
+head(cn.wts.sums)
+
+cn.wts.sums$pct.c.cont.by.fraction<-((cn.wts.sums$orgc.weight)/(cn.wts.sums$totwt) * 100)
+head(cn.wts.sums)
+#cn.wts.sums is the last full-size dataframe. Everything after this is a subset of some kind. 
+```
+
+Save the cn.wts.sums dataframe as a .csv file (not included)
+```{ r include=FALSE}
+write.csv(cn.wts.sums, file = "cn.wts.sums.csv")
+```

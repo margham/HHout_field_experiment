@@ -1,0 +1,712 @@
+---
+title: "Organic_C_Calculations"
+author: "Becca"
+date: "28 februari 2019"
+output:
+  word_document: default
+  pdf_document: default
+  toc: yes
+  html_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+#Introduction
+
+###The purpose of this script is to:
+
+
+  1. combine the bulk and fraction CN data,
+
+  2. calculate the proportion of each bulk sample and fraction sample that is organic and inorganic, and then
+
+  3. calculate the contribution of each fraction's organic C to the total organic C. 
+
+
+This document will also compare C estimates by weight for the organic and inorganic fractions in the bulk soil and the fractions. This will help to determine how much of our C budget was lost in fractionation. Note that some of this C 'lost' may be in the DOC fraction, which still has not been measured. 
+
+## 1. Load data, clean and combine dataframes (code not included)
+
+1.1 Load data and libraries
+```{r include=FALSE}
+#libraries
+library(tidyverse)
+library(dplyr)
+#library(plyr)
+library(ggplot2)
+library(ggtern)
+library(DirichletReg)
+library(magrittr)
+library(stats)
+library(lme4)
+```
+
+
+## 2. Data Visualization
+
+Subset just the data I'm interested in to create the compositional charts (not included):
+```{ r include=FALSE}
+cn.wts.sums<-read.csv("cn.wts.sums.csv", header=TRUE)
+summary(cn.wts.sums)
+#cn.wts.sums <- cn.wts.sums[,-c(1,2)]
+names(cn.wts.sums)
+
+#change picea_sit to picea_ab
+library(plyr)
+cn.wts.sums$species<-mapvalues(cn.wts.sums$species, from=c("picea_sit", "picea_ab"), to=c("picea", "picea"))
+
+organic.c.values<-select(cn.wts.sums, site, depth, species, fraction.name, fraction.code, c.in.org.fract, org.c.in.t.frac, soil.start.wt, weight.g, orgc.weight, pct.c.cont.by.fraction)
+
+write.csv(organic.c.values, file = "organic.c.values.csv")
+#View(organic.c.values)
+```
+
+**organic.c.values** is a subset of **cn.wts.sums**, should have all of the same values. 
+
+Plot data by site
+```{ r echo=FALSE}
+organic.c.values<-read.csv("organic.c.values.csv", header=TRUE, dec=".")
+organic.c.values$depth<-as.factor(organic.c.values$depth)
+#install.packages("wesanderson")
+library(wesanderson)
+fill=wes_palette("FantasticFox1", 3)
+
+#gather by site
+site.orgc<-organic.c.values %>%
+  group_by(site) %>%
+  summarize(total_c = sum(pct.c.cont.by.fraction))
+site.orgc
+#okay, so everything sums to 100 by site + depth, that's good!
+
+carbon.plot.site <- ggplot(organic.c.values, aes(x = site, y = pct.c.cont.by.fraction, fill = fraction.name)) + 
+  geom_col() +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Sampling Site", y = "Percent of dry-weight OC contributed by solid fraction")
+carbon.plot.site + 
+  facet_wrap(~depth) +
+  scale_fill_manual(values=fill)
+```
+
+
+Plot data by species
+```{r echo=FALSE}
+#gather by species 
+
+# carbon.plot.species <- organic.c.values %>%
+#   group_by(species) %>%
+#   summarize(total_c_sp = sum(pct.c.cont.by.fraction))
+# carbon.plot.species
+
+#okay, so it's more because each species is represented by multiple sites. So we need to normalize by species to get a good stacked chart.
+#make a data frame of aggregate c values
+
+#total c weights by species
+# total.c.sp<-aggregate(orgc.weight ~ species + depth, organic.c.values, sum)
+# total.c.sp$totwt<-total.c.sp$orgc.weight
+# total.c.sp<-total.c.sp[,-(3)]
+# head(total.c.sp)
+
+#join with the species data frame
+# carbon.plot.sp<-join(organic.c.values, total.c.sp, type="left")
+# head(carbon.plot.sp)
+# 
+# #make the weighted data (proportions)
+# carbon.plot.sp$pct.c.cont.by.fraction<-((carbon.plot.sp$orgc.weight)/(carbon.plot.sp$totwt) * 100)
+# head(carbon.plot.sp)
+
+```
+
+```{r }
+carbon.plot.sp <- read.csv("carbon.plot.sp.csv", header = TRUE)
+summary(carbon.plot.sp)
+```
+
+```{r }
+#make a stacked plot
+carbon.plot.species <- ggplot(carbon.plot.sp, aes(x = species, y = pct.c.cont.by.fraction, fill = fraction.name)) + 
+  geom_col() +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Dominant Species", y = "Percent of dry-weight OC contributed by solid fraction")
+carbon.plot.species + 
+  facet_wrap(~depth) +
+  scale_fill_manual(values=fill)
+```
+
+Save carbon.plot.sp as a .csv file
+```{ r }
+write.csv(carbon.plot.sp, file="carbon.plot.sp.csv")
+```
+
+
+## 3.Data analysis:
+
+  *Compare the amount of organic C in start to amount at the end of fractionation.
+
+  *Weight the amount of C stored by the weight of the fraction (ie, pct of organic c in that fraction vs. the proportion of that fraction of the dry soil weight). 
+
+  *Plot the data spatially (site_mapping.Rmd). 
+
+  *Dirichlet regression (See file Dirichlet_distributions.Rmd).
+
+
+3.1. Compare organic C at start and end of fractionation 
+
+First, compare the total soil mass at start and end of fractionation:
+```{r }
+soil.loss.df<-select(cn.wts.sums, site, depth, species, soil.start.wt, weight.g)
+soil.loss.df$depth <- as.factor(soil.loss.df$depth)
+summary(soil.loss.df)
+
+detach(package:plyr)
+soil.loss.df1<-soil.loss.df %>% 
+    group_by(site, depth, species) %>%
+    summarize(
+    soil.start.wt = mean(soil.start.wt),
+    weight.g = sum(weight.g))
+summary(soil.loss.df1)
+
+#calculate difference and % difference between start and final mass
+soil.loss.df1$difference<-soil.loss.df1$weight.g - soil.loss.df1$soil.start.wt 
+soil.loss.df1$pct.diff<-(soil.loss.df1$difference/soil.loss.df1$soil.start.wt)*100
+
+#plot the differences 
+soil.loss.site<-ggplot(soil.loss.df1, aes(x = site, y = pct.diff)) + 
+  geom_point() +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Site", y = "Percent difference between start and final soil mass")
+soil.loss.site + 
+  facet_grid(~depth)
+```
+
+
+Calculate the differences between start and final C. 
+```{r }
+#depth 1
+sl1<-soil.loss.df1[soil.loss.df1$depth==1,]
+hist(sl1$pct.diff)
+
+#depth 2
+sl2<-soil.loss.df1[soil.loss.df1$depth==2,]
+hist(sl2$pct.diff)
+
+#summary stats
+diff.summary <- soil.loss.df1%>%
+  group_by(depth, species)%>%
+  summarize(mean.pct.diff = mean(pct.diff), 
+            sd.pct.diff = sd(pct.diff), 
+            n=n(), 
+            upper = mean.pct.diff + (sd.pct.diff/2), 
+            lower = mean.pct.diff - (sd.pct.diff/2))
+diff.summary
+
+massdiff<-ggplot(diff.summary, aes(x=species, y=mean.pct.diff)) +
+            #geom_point(color='red', size=2) +
+            geom_pointrange(aes(ymin=lower, ymax=upper)) +
+            theme(legend.title = element_blank(), 
+                   axis.text.x = element_text(angle = 90, hjust = 1)) +
+            labs(x = "Species",
+                 y = "Mean % difference", 
+                 title = "Mean % difference", 
+                 subtitle = "(Bulk soil mass - sum of fractions soil mass)")
+massdiff + facet_wrap(~depth)
+```
+
+*Note* Site 159L depth 2 has the largest amount of soil mass loss, around 23%. All of the others have below 10% difference. Much of this error can probably be attributed to measurement error. 
+
+
+3.2 Compare organic C mass at start and end of fractionation:
+```{r results="hide"}
+#Multiply %organic in bulk by soil start mass to get the mass of organic C in the starting 
+#fractionation soil sample
+cn.wts.sums$org.c.start.mass<-(cn.wts.sums$org.c.in.total.bulk/100)*cn.wts.sums$soil.start.wt #is this a valid way to measure this? Maybe we should correct for the change in soil weight from start to finish. 
+cn.wts.sums$org.c.fraction.mass<-(cn.wts.sums$weight.g*(cn.wts.sums$org.c.in.t.frac/100))
+c.loss.from.fractionation<-select(cn.wts.sums, site, depth, species, org.c.start.mass, org.c.fraction.mass)
+
+#get total organic c final mass
+c.loss.df<-
+  c.loss.from.fractionation %>%
+  group_by(species, site, depth) %>%
+  summarize(c.start=mean(org.c.start.mass),
+            c.end=sum(org.c.fraction.mass),
+            difference=(c.end-c.start),
+            pct.diff=(difference/c.start)*100)
+c.loss.df
+
+#summarize by species and depth
+orgc.diff.summary<-
+  c.loss.df %>%
+  group_by(species, depth) %>%
+  summarize(mean.pct.diff = mean(pct.diff), 
+            sd.pct.diff = sd(pct.diff), 
+            n=n(), 
+            upper = mean.pct.diff + (sd.pct.diff/2),
+            lower = mean.pct.diff - (sd.pct.diff/2))
+orgc.diff.summary 
+
+
+orgdiff<-ggplot(orgc.diff.summary, aes(x=species, y=mean.pct.diff)) +
+            #geom_point(color='red', size=2) +
+            geom_pointrange(aes(ymin=lower, ymax=upper)) +
+            theme(legend.title = element_blank(), 
+                   axis.text.x = element_text(angle = 90, hjust = 1)) +
+            labs(x = "Species",
+                 y = "Mean % difference", 
+                 title = "Mean % difference", 
+                 subtitle = "(Sum of fractions organic C - bulk organic C)")
+orgdiff + facet_wrap(~depth)
+```
+
+
+3.3 Compare delta-C and delta-total-weight by fraction - it may be that certain fractions are being systematically over- or under-estimated:
+```{r }
+soil.c.lm<-lm(c.loss.df$pct.diff ~ soil.loss.df1$pct.diff)
+summary(soil.c.lm)
+#not really any correlations between the soil loss and c loss calculations. Variation appears to be random error.
+#however, residuals are right-skewed
+```
+
+
+3.4 Correct delta-C using change in soil mass (ie, final C totals should be higher or lower depending on the mass change).
+```{r results="hide"}
+#Multiply bulk C content by the change in soil weight to get the target weight for the samples
+
+org.c.corrections<-select(cn.wts.sums, site, depth, species, fraction.name, fraction.code, org.c.in.t.frac, org.c.in.total.bulk, soil.start.wt, weight.g, orgc.weight, org.c.start.mass, org.c.fraction.mass)
+
+org.c.corrections1<-org.c.corrections %>%
+  group_by(site, depth, species) %>%
+  summarize(soil.start.wt = mean(soil.start.wt),
+            soil.final.wt = sum(weight.g),
+            org.c.in.total.bulk = mean(org.c.in.total.bulk),
+            org.c.fraction.mass.sum = sum(org.c.fraction.mass), 
+            old.target.c.mass = mean(org.c.start.mass))
+
+#don't drop outliers            
+org.c.corrections.drop<-subset(org.c.corrections1, org.c.corrections1$soil.final.wt>=5)
+summary(org.c.corrections.drop)
+
+#get the percent difference betwen the start weight and the final weight so we can multiply our target C values by this  
+org.c.corrections.drop$difference<-org.c.corrections.drop$soil.final.wt - org.c.corrections.drop$soil.start.wt
+org.c.corrections.drop$pct.diff<-(org.c.corrections.drop$difference/org.c.corrections.drop$soil.start.wt)*100
+
+#Is this percent difference the same as the one we plotted before?
+all.equal(org.c.corrections.drop$pct.diff, soil.loss.df1$pct.diff)
+#yes
+```
+
+
+Plot the differences to make sure our new dataset matches the 
+soil.loss.df1 dataset. 
+```{ r }
+soil.loss.test<-ggplot(org.c.corrections.drop, aes(x = site, y = pct.diff)) + 
+  geom_point() +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Site", y = "Percent difference between start and final soil mass")
+soil.loss.test + 
+  facet_wrap(~depth)
+#great, everything looks fine. Let's now re-make our soil target weights and target C masses based on the 
+#final soil weight.
+```
+
+
+3.5 Create a new target C mass variable using the new final soil mass.
+```{r results="hide"}
+org.c.corrections.drop$target.c.mass<-(org.c.corrections.drop$org.c.in.total.bulk*org.c.corrections.drop$soil.final.wt)/100
+
+#review the difference that correcting for soil final weight makes. It's pretty small.
+org.c.diff<-((org.c.corrections.drop$old.target.c.mass-org.c.corrections.drop$target.c.mass)/org.c.corrections.drop$target.c.mass)/100
+org.c.diff
+
+#now that we have the target C mass, let's compare the total C mass to the target c mass 
+#rather than the original soil C mass:
+#get total organic c final mass
+org.c.corrections2<-
+  org.c.corrections.drop %>%
+  group_by(species, site, depth) %>%
+  summarize(target.c.mass=mean(target.c.mass),
+            old.target.c.mass=mean(old.target.c.mass),
+            c.end=mean(org.c.fraction.mass.sum),
+            org.c.difference=(c.end-target.c.mass),
+            org.c.pct.difference=(org.c.difference/target.c.mass)*100)
+summary(org.c.corrections2)
+
+
+org.c.corrections.sp<-org.c.corrections2 %>%
+    group_by(species, depth) %>%
+    summarize(mean.pct.diff = mean(org.c.pct.difference), 
+              n=n(), 
+              sd.pct.diff = sd(org.c.pct.difference),
+              upper = mean.pct.diff + (sd.pct.diff/2),
+              lower = mean.pct.diff - (sd.pct.diff/2))
+org.c.corrections.sp
+
+#plot the differences between start and final C weights
+closs.site.corrected<-ggplot(org.c.corrections.sp, aes(x = species, y = mean.pct.diff)) + 
+      geom_pointrange(aes(ymin=lower, ymax=upper)) +
+      geom_linerange(aes(ymin=orgc.diff.summary$lower, ymax=orgc.diff.summary$upper), color='red', lty=2) +
+      theme(legend.title = element_blank(), 
+             axis.text.x = element_text(angle = 90, hjust = 1)) +
+      labs(x = "Species",
+           y = "Mean % difference", 
+           title = "Mean % difference in soil organic C", 
+           subtitle = "(Sum of fractions organic C - bulk organic C, corrected for final soil mass)*",
+           caption = "*uncorrected differences superimposed in red")
+closs.site.corrected + facet_wrap(~depth)
+```
+
+The corrected target C mass does reduce the variation around the estimates, but the means are nearly the same. 
+
+3.5.1 Plot old target against new target
+```{r }
+plot(org.c.corrections2$old.target.c.mass, org.c.corrections2$target.c.mass)
+test<-lm(target.c.mass~old.target.c.mass, data=org.c.corrections2)
+summary(test)
+#the new target c mass is almost completley explained by the old target c mass
+
+#difference in organic c (post-ashing) total c estimates
+t.test(org.c.corrections2$c.end, org.c.corrections2$target.c.mass)
+#the values are very close. 
+```
+
+
+Pull out values of c.loss.df that have >50% and 20-49% change:
+```{r }
+gain.above.50<-org.c.corrections2[org.c.corrections2$org.c.pct.difference>=50,]
+gain.20.to.49<-subset(org.c.corrections2, org.c.pct.difference>=20 & org.c.pct.difference<50)
+gain.above.50
+gain.20.to.49
+#there are a few large outliers, still need to figure out why.
+```
+
+
+3.6 Are the differences between start and final C mass due to overestimation at the bulk level?
+```{r results="hide"}
+#get the total c weights before ashing
+names(cn.wts.sums)
+pre.ash.c<-cn.wts.sums %>%
+  group_by(site, depth, species) %>%
+  summarize(c.bulk.pre.ashing = mean((mean.c.pre/100)*soil.start.wt),
+            c.sum.fractions.pre.ashing = sum(weight.g*(pct.c.pre.ashing/100)),
+            c.bulk.post.ashing = mean((mean.c.post/100)*soil.start.wt),
+            c.sum.fractions.post.ashing = sum(weight.g*(pct.c.post.ashing/100)))
+summary(pre.ash.c)
+
+#compare the pre-ashing c weight between the bulk and fractions
+pre.ash.c$diff.g<-pre.ash.c$c.bulk.pre.ashing-pre.ash.c$c.sum.fractions.pre.ashing
+#get the pct. difference
+pre.ash.c$diff.pct<-(pre.ash.c$diff.g/pre.ash.c$c.bulk.pre.ashing)*100
+```
+
+
+Plot the differences
+```{r }
+#differences in grams
+plot(pre.ash.c$diff.g)
+hist(pre.ash.c$diff.g)
+
+#differences pct
+plot(pre.ash.c$diff.pct)
+hist(pre.ash.c$diff.pct)
+
+
+pre.ash.c.sp<-pre.ash.c %>%
+    group_by(species, depth) %>%
+    summarize(mean.pct.diff = mean(diff.pct), 
+              n=n(), 
+              sd.pct.diff = sd(diff.pct),
+              upper = mean.pct.diff + (sd.pct.diff/2),
+              lower = mean.pct.diff - (sd.pct.diff/2))
+pre.ash.c.sp
+
+#plot ggplot
+closs.sp <- ggplot(pre.ash.c.sp, aes(x=species, y=mean.pct.diff)) +
+  geom_pointrange(aes(ymin=lower, ymax=upper)) +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Species",
+       y = "Mean % difference", 
+       title = "Mean % difference in total soil C", 
+       subtitle = "(Sum of fractions soil C - bulk soil C before ashing)")
+closs.sp + facet_wrap(~depth)
+  
+
+#what is the difference
+t.test(pre.ash.c$c.bulk.pre.ashing, pre.ash.c$c.sum.fractions.pre.ashing)
+```
+
+Before ashing, the average sum-of-fractions soil C estimate is lower than the average bulk soil C estimate. This flips in the estimates of organic C. We can therefore say that the difference bewteen our sum-of-fractions estimates and our bulk estimates does not occur at the pre-ashing stage. 
+
+
+Do the same for post-ashing c
+```{r }
+pre.ash.c$post.diff.g<-pre.ash.c$c.sum.fractions.post.ashing-pre.ash.c$c.bulk.post.ashing
+#get the pct. difference
+pre.ash.c$post.diff.pct<-(pre.ash.c$post.diff.g/pre.ash.c$c.bulk.post.ashing)*100 #difference in grams normalized by the bulk c mass
+
+#plot the differences
+plot(pre.ash.c$post.diff.g)
+hist(pre.ash.c$post.diff.g)
+
+plot(pre.ash.c$post.diff.pct)
+hist(pre.ash.c$post.diff.pct)
+#we never gain inorganic c, but we lose up to 87% in our fractions as compared with the bulk
+
+post.df<-pre.ash.c %>%
+  group_by(species, depth) %>%
+  summarize(mean.pct.diff = mean(post.diff.pct), 
+            n=n(), 
+            sd.pct.diff = sd(post.diff.pct),
+            upper = mean.pct.diff + (sd.pct.diff/2),
+            lower = mean.pct.diff - (sd.pct.diff/2))  
+summary(post.df)
+
+#plot
+closs.sp.post <- ggplot(post.df, aes(x=species, y=mean.pct.diff)) +
+  geom_pointrange(aes(ymin=lower, ymax=upper)) +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Species",
+       y = "Mean % difference", 
+       title = "Mean % difference in inorganic soil C", 
+       subtitle = "(Sum of fractions soil C - bulk soil C after ashing)")
+closs.sp.post + facet_wrap(~depth)
+
+#test of difference in group means
+#difference in inorganic c (post-ashing c) estimates
+inorg<-t.test(pre.ash.c$c.bulk.post.ashing, pre.ash.c$c.sum.fractions.post.ashing)
+inorg
+#there is a large difference in the estimates of inorganic C between bulk and sum-of-fractions post-ashing C - essentially, this variation is causing variations in our estimates of organic C at both levels, which explains why some of our variation in organic C is so large. 
+```
+
+
+The post-ashing C shows large variation between the sum of fraction post-ashing C and the bulk post-ashing C. Clearly the ashing is systematically removing more C than just the organic. But why would this be the case? There is a possibility the patchiness of CaCO3 in the soil is causing these random deviations, or that differences in burnability between the bulk soil and fractions is causing some deviation. 
+
+There could be a difference in that not all of the burned fractions have the same mass, and if we don't correct for that difference then the fractions with less mass could heat up faster and therefore burn more material in the same amount of time as the ones with more mass.
+
+
+3.7 Compare N masses before and after ashing, bulk and sum-of-fractions:
+```{r results="hide"}
+n.data<-cn.wts.sums
+#Multiply %organic n in bulk by soil start mass to get the mass of organic n in the starting fractionation soil sample
+n.data$org.n.start.mass<-(n.data$org.n.in.total.bulk/100)*n.data$soil.start.wt #is this a valid way to measure this? Maybe we should correct for the change in soil weight from start to finish. 
+n.data$org.n.fraction.mass<-(n.data$weight.g*(n.data$org.n.in.t.frac/100))
+n.loss.from.fractionation<-select(n.data, site, depth, species, org.n.start.mass, org.n.fraction.mass)
+
+#get total organic n final mass
+ n.loss.df<-
+   n.loss.from.fractionation %>%
+   group_by(species, site, depth) %>%
+   summarize(n.start=mean(org.n.start.mass),
+             n.end=sum(org.n.fraction.mass),
+             difference=(n.end-n.start),
+             pct.diff=(difference/n.start)*100)
+ n.loss.df
+```
+
+
+Plot the differences between start and final  organic N mass
+```{r }
+nloss.site<-ggplot(n.loss.df, aes(x = site, y = pct.diff)) + 
+  geom_point() +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Site", y = "Percent difference between start and final organic n mass")
+nloss.site + 
+  facet_wrap(~depth) #+
+  #scale_fill_manual(values=fill))
+``` 
+
+
+Remove the extreme outlier and plot again:
+```{r }
+names(n.loss.df)
+n.loss.df1<-n.loss.df[!n.loss.df$site=="130Q1", ]
+summary(n.loss.df1)
+
+
+nloss.site<-ggplot(n.loss.df1, aes(x = site, y = pct.diff)) + 
+  geom_point() +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Site", y = "Percent difference between start and final organic n mass")
+nloss.site + 
+  facet_wrap(~depth)
+```
+
+
+
+## 4. Comparing organic and inorganic N in bulk and sum-of-fractions samples. 
+
+4.1 Test inorganic N mass and bulk N mass:
+```{r }
+pre.ash.n<-n.data %>%
+  group_by(site, depth, species) %>%
+  summarize(n.bulk.pre.ashing = mean((mean.n.pre/100)*soil.start.wt),
+            n.sum.fractions.pre.ashing = sum(weight.g*(pct.n.pre.ashing/100)),
+            n.bulk.post.ashing = mean((mean.n.post/100)*soil.start.wt),
+            n.sum.fractions.post.ashing = sum(weight.g*(pct.n.post.ashing/100)))
+summary(pre.ash.n)
+
+#compare the pre-ashing c weight between the bulk and fractions
+pre.ash.n$diff.g<-pre.ash.n$n.bulk.pre.ashing-pre.ash.n$n.sum.fractions.pre.ashing
+#get the pct. difference
+pre.ash.n$diff.pct<-(pre.ash.n$diff.g/pre.ash.n$n.bulk.pre.ashing)*100
+
+#plot the differences
+plot(pre.ash.n$diff.g)
+hist(pre.ash.n$diff.g)
+
+plot(pre.ash.n$diff.pct)
+hist(pre.ash.n$diff.pct)
+
+#do the same for post-ashicg n
+pre.ash.n$post.diff.g<-pre.ash.n$n.sum.fractions.post.ashing-pre.ash.n$n.bulk.post.ashing
+#get the pct. difference
+pre.ash.n$post.diff.pct<-(pre.ash.n$post.diff.g/pre.ash.n$n.bulk.post.ashing)*100
+
+#plot the differences
+plot(pre.ash.n$post.diff.g)
+hist(pre.ash.n$post.diff.g)
+
+plot(pre.ash.n$post.diff.pct)
+hist(pre.ash.n$post.diff.pct)
+``` 
+
+
+Remove the extreme outliers and try again:
+```{ r }
+summary(pre.ash.n)
+pre.ash.n.sub<-pre.ash.n[pre.ash.n$post.diff.pct>(-500) & pre.ash.n$post.diff.pct<1000,]
+plot(pre.ash.n.sub$post.diff.pct)
+
+inorg.n.loss<-ggplot(pre.ash.n.sub, aes(x = site, y = post.diff.pct)) + 
+  geom_point(aes(color=species)) +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "Site", y = "Percent difference between bulk and sum-of-fractions post-ashing n mass")
+inorg.n.loss + 
+  facet_wrap(~depth)
+#there appear to be at least two groups here, not related to species. I would try grouping by fraction code but that wouldn't make sense because these differences are calculated based on sum of fractions.
+```
+
+
+4.2 Summarize by fraction code
+```{r}
+pre.ash.n.2 <- n.data %>%
+  group_by(site, depth, species, fraction.code) %>%
+  summarize(n.bulk.pre.ashing = mean((mean.n.pre/100)*soil.start.wt),
+            n.fraction.pre.ashing = sum(weight.g*(pct.n.pre.ashing/100)),
+            n.bulk.post.ashing = mean((mean.n.post/100)*soil.start.wt),
+            n.fraction.post.ashing = sum(weight.g*(pct.n.post.ashing/100)))
+summary(pre.ash.n.2)
+head(pre.ash.n.2)
+pre.ash.n.2$depth <- as.factor(pre.ash.n.2$depth)
+
+
+n.frac <- pre.ash.n.2 %>%
+  group_by(species, depth, fraction.code) %>%
+  summarize(n.fractions.pre.ashing = mean(n.fraction.pre.ashing),
+            n.fractions.post.ashing = mean(n.fraction.post.ashing),
+            post.diff.g = n.fractions.post.ashing-n.fractions.pre.ashing, 
+            post.diff.pct = ((post.diff.g/n.fractions.pre.ashing)*100),
+            mean.pct.diff = mean(post.diff.pct))
+summary(n.frac)
+
+#look at the n values
+hist(n.frac$n.fractions.pre.ashing)
+hist(n.frac$n.fractions.post.ashing)
+
+#now get stats for fraction codes
+n.frac.sp <- n.frac %>%
+  group_by(depth, fraction.code) %>%
+  summarize(n=n(), 
+            mean.pct.diff = mean(post.diff.pct),
+            sd.pct.diff = sd(post.diff.pct),
+            upper = mean.pct.diff + (sd.pct.diff/2),
+            lower = mean.pct.diff - (sd.pct.diff/2))
+summary(n.frac.sp)
+
+#plot n loss before and after ashing by fraction code
+inorg.n.loss<-ggplot(n.frac.sp, aes(x = fraction.code, y = mean.pct.diff)) + 
+  geom_pointrange(aes(ymin=lower, ymax=upper)) +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Fraction",
+       y = "Mean % difference", 
+       title = "% difference in soil N before and after ashing", 
+       subtitle = "(% difference in soil N mass in fractions before and after ashing)")
+inorg.n.loss + facet_wrap(~depth)
+```
+
+It appears that the majority of N is organic, as it almost completely disappears after ashing. 
+
+
+4.3 Plot difference in total and inorganic N from bulk to sum-of-fractions
+```{r}
+detach(package:plyr)
+library(dplyr)
+n.bulk <- pre.ash.n.2 %>%
+  group_by(site, species, depth) %>%
+  summarize(
+            n.frac.pre.ashing = sum(n.fraction.pre.ashing),
+            n.frac.post.ashing = sum(n.fraction.post.ashing),
+            n.bulk.pre = mean(n.bulk.pre.ashing), 
+            n.bulk.post = mean(n.bulk.post.ashing),
+            post.diff.g = n.frac.post.ashing-n.bulk.post, 
+            post.diff.pct = (post.diff.g/n.bulk.post)*100,
+            pre.diff.g = n.frac.pre.ashing-n.bulk.pre,
+            pre.diff.pct = (pre.diff.g/n.bulk.pre)*100,
+          )
+summary(n.bulk)
+
+hist(n.bulk$n.frac.pre.ashing)
+hist(n.bulk$n.frac.post.ashing)
+hist(n.bulk$pre.diff.pct)
+hist(n.bulk$post.diff.pct)
+
+#remove outlier
+n.bulk.sub<-n.bulk[n.bulk$post.diff.pct<=1000,]
+
+#now get stats for bulk vs sum of fractions n
+n.bulk.sp <- n.bulk.sub %>%
+  group_by(depth, species) %>%
+  summarize(n=n(), 
+            #pre-ashing comparison
+            pre.mean.pct.diff = mean(pre.diff.pct), 
+            pre.sd.pct.diff = sd(pre.diff.pct),
+            pre.upper = pre.mean.pct.diff + (pre.sd.pct.diff/2),
+            pre.lower = pre.mean.pct.diff - (pre.sd.pct.diff/2), 
+            #post-ashing comparison
+            post.mean.pct.diff = mean(post.diff.pct),
+            post.sd.pct.diff = sd(post.diff.pct),
+            post.upper = post.mean.pct.diff + (post.sd.pct.diff/2),
+            post.lower = pre.mean.pct.diff - (post.sd.pct.diff/2))
+summary(n.bulk.sp)
+
+#Total n loss
+total.n.diff<-ggplot(n.bulk.sp, aes(x = species, y = pre.mean.pct.diff)) + 
+  geom_pointrange(aes(ymin=pre.lower, ymax=pre.upper)) +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Species",
+       y = "Mean % difference in total N", 
+       title = "% difference in soil N", 
+       subtitle = " (bulk vs sum of fractions before combustion)")
+total.n.diff + facet_wrap(~depth)
+
+
+#post-ashing n loss
+inorg.n.diff<-ggplot(n.bulk.sp, aes(x = species, y = post.mean.pct.diff)) + 
+  geom_pointrange(aes(ymin=post.lower, ymax=post.upper)) +
+  theme(legend.title = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Species",
+       y = "Mean % difference", 
+       title = "% difference in soil N after combustion", 
+       subtitle = "(sum of fractions - bulk soil N after combustion)",
+       caption = "sum of fractions N is consistently overestimated")
+inorg.n.diff + facet_wrap(~depth)
+# inorg.n.loss<-ggplot(pre.ash.n.sub, aes(x = site, y = post.diff.pct)) + 
+#   geom_point(aes(color=species)) +
+#   theme(legend.title = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+#   labs(x = "Site", y = "Percent difference between bulk and sum-of-fractions post-ashing n mass")
+# inorg.n.loss + 
+#   facet_wrap(~depth)
+```
+
+
+## Conclusions: 
+
+Organic and inorganic C and N show similar patterns in that the inorganic is consistently underestimated by the ashing method. This leads to slightly higher estimates of organic C and N in our sum-of-fractions samples when compared with the bulk samples. However, this difference does not change the relative order of C content among sites or species, so we can still use the data to estimate relative differences among species. However, this data should not be interpreted for total soil C storage since our absolute measurements of organic C are likely over-estimated. 
+

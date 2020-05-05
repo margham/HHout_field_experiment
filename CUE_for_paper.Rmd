@@ -1,0 +1,369 @@
+---
+title: "CUE_for_paper"
+author: "Becca"
+date: "3/18/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Doing the microbial growth rate and CUE analysis with the master data frame and the cue data frame. 
+
+Load libraries
+```{r }
+library(ggplot2)
+library(plyr)
+library(tidyverse)
+#library(plyr)
+#library(dplyr)
+library(AICcmodavg)
+library(FlexDir)
+library(DirichletReg)
+```
+
+
+Load CUE data and make the species levels match with the master dataframe
+```{ r }
+cue <- read.csv("field_CUE_17.csv", header=TRUE)
+summary(cue)
+
+#outlier in row 33
+cue_corrected<-cue[-33, ]
+summary(cue_corrected)
+
+#combine picea sitchensis and picea abies into one group
+cue_corrected$species<-mapvalues(cue_corrected$species, from=c("Acer", "Fagus", "Fraxinus", "Picea abies", "Picea sitchensis", "Populus", "Quercus"), to=c("acer", "fagus", "fraxinus", "picea", "picea", "populus", "quercus"))
+#check that it worked
+levels(cue_corrected$species)
+#looks good!
+```
+
+
+Read in the master dataframe
+```{ r }
+hhout <- read.csv("hhout_master", header=TRUE)
+summary(hhout)
+
+#make depth a factor
+hhout$depth <- as.factor(hhout$depth)
+
+#subset out just depth 1 (to match with CUE data)
+hhout_sub <- hhout[hhout$depth=="1", ]
+summary(hhout_sub)  
+```
+
+
+Add CUE to the hhout_sub data
+```{ r }
+hhout_sub_cue <- join(hhout_sub, cue_corrected, type="left")
+summary(hhout_sub_cue)
+
+#rename for analysis convenience
+hh_cue <- hhout_sub_cue
+
+#write the data frame for convenience
+write.csv(hh_cue, file = "hh_cue.csv", row.names = FALSE)
+```
+
+
+Plot CUE as function of different soil and litter parameters
+```{r }
+#read in the combined dataframe
+# hh_cue <- read.csv("hh_cue.csv", header=TRUE)
+# summary(hh_cue)
+# hh_cue$depth = as.factor(hh_cue$depth)
+
+#calculate HWE-C as mg C per g dry weight litter
+# hhout$npoc.mg.g <- (hhout$soil.npoc.mg.L * 0.04) / 5
+# summary(hhout$npoc.mg.g)
+# hh_cue$litter.hwec.mg.g <- (hh_cue$litter.hwec.ppm * 0.2 / 2)
+# summary(hh_cue$litter.hwec.mg.g)
+# summary(hh_cue$litter.cell.mg.g)
+
+#write.csv(hh_cue, file = "hh_cue.csv", row.names = FALSE)
+
+hh_cue <- read.csv("hh_cue.csv", header=TRUE)
+
+#HWE-c
+(cueplot1 <- ggplot(hh_cue, aes(x = litter.hwec.mg.g, y = CUE)) +
+              geom_point()+
+              geom_smooth())
+
+#soil pH
+(cueplot2 <- ggplot(hh_cue, aes(x = soil.ph, y = CUE)) + 
+              geom_point())
+
+#litter lignin.n.ratio
+#first make the ln ratio variable
+hh_cue$lnratio <- (hh_cue$litter.lignin.mg.g/10)/hh_cue$litter.pct.n
+#now make the plot
+(cueplot3 <- ggplot(hh_cue, aes(x = lnratio, y=CUE)) + 
+              geom_point() + geom_jitter() + geom_smooth(method="lm")) 
+
+
+#try as function of latitude
+(cueplot4 <- ggplot(hh_cue, aes(x = lat, y=CUE)) +
+              geom_point())
+```
+
+There's just a huge range in CUE, doesn't seem to have a pattern. 
+
+Make a model set based on potentially-important parameters.
+
+**Basic parameters**
+* species 
+
+**Soil organic and inorganic carbon and nitrogen**
+* pct.org.c.in.whole.bulk
+* pct.org.n.in.whole.bulk
+* pct.c.post.ashing.bulk
+* pct.n.post.ashing.bulk
+* soil.npoc.mg.L
+
+**Soil moisture and ph**
+* soil.ph
+* pct.m
+
+**litter chemistry**
+* litter.pct.n
+* litter.pct.c
+* litter.lignin.mg.g
+* litter.cell.mg.g
+* litter.hwec.mg.g
+* lnratio
+
+First check which parameters are closely corerlated
+```{ r}
+library(GGally)
+
+#subset the relevant parameters
+cue_testing <- subset(hh_cue, select = c(species, pct.c.in.org.fraction.bulk, pct.n.in.org.fraction.bulk, pct.c.post.ashing.bulk, pct.n.post.ashing.bulk, soil.npoc.mg.L, soil.ph, pct.m, litter.pct.c, litter.pct.n, litter.lignin.mg.g, litter.cell.mg.g, litter.hwec.ppm, lnratio))
+  
+ggpairs(cue_testing)
+```
+
+**Pairs that are strongly related*:**
+* +0.843: pct.c.in.org.fraction.bulk + pct.n.in.org.fraction.bulk
+
+* +0.877: litter.lignin.mg.g + litter.pct.c
+* -0.912: litter.lignin.mg.g + litter.pct.n
+
+* +0.816: lnratio + litter.pct.c
+* -0.957: lnratio + litter.pct.n
+* +0.943: lnratio + litter.lignin.mg.g
+* +0.804: lnratio + litter.cell.mg.g
+* +0.804: lnratio + litter.cell.mg.g
+* -0.933: lnratio + litter.hwec.ppm   
+
+* -0.968: litter.hwec.ppm + litter.lignin.mg.g
+* -0.692: litter.hwec.ppm + litter.cell.mg.g
+
+* -0.773: litter.pct.n + litter.pct.c
+
+* -0.938: litter.pct.c + litter.hwec.ppm
+* -0.884: litter.hwec.ppm + litter.pct.c
+
+* -0.840: litter.cell.mg.g + litter.pct.n
+* +0.826: litter.cell.mg.g + litter.lignin.mg.g
+
+
+**Variables to use out of the strongly-related variables**
+* lnratio <- use in place of litter.hwec.mg.g (or if you really want use hwec.ppm and leave out lnratio)
+* lnratio <- use in place of litter.pct.c, litter.cell.mg.g, litter.pct.n, litter.lignin.mg.g
+* litter.pct.c <- use in place of litter.hwec.ppm (or make a pct.c:hwec ratio)
+* pct.org.c.in.whole.bulk <- use in place of pct.org.n.in.whole.bulk
+
+**Variables to use from the non-strongly-related variables**
+* soil ph
+* soil.pct.m - don't use this one, use the pct.m from the CUE calculations
+* species (maybe...but probably not)
+* soil.doc.mass.g
+* inorganic c or n - no reason to think this is important - maybe try %n post ashing
+
+Make a litter.ccratio variable for ratio between litter c and litter hwe-c
+```{r }
+#first 
+hh_cue$litter.ccratio <- hh_cue$litter.pct.c/(hh_cue$litter.hwec.mg.g/10)
+summary(hh_cue$litter.ccratio)
+``` 
+
+
+Make the model set
+```{r }
+#single models
+cue.null <- lm(CUE ~ 1, data = hh_cue)
+cue.lnratio <- lm(CUE ~ lnratio, data = hh_cue)
+cue.litter.c <- lm(CUE ~ litter.pct.c, data = hh_cue)
+cue.litter.cc <- lm(CUE ~ litter.ccratio, data = hh_cue)
+cue.soil.ph <- lm(CUE ~ soil.ph, data=hh_cue)
+cue.npoc <- lm(CUE ~ soil.doc.mass.g, data = hh_cue)
+cue.inorg.n <- lm(CUE ~ pct.n.post.ashing.bulk, data = hh_cue)
+cue.org.c <- lm(CUE ~ org.c.in.total.bulk, data = hh_cue)
+cue.
+
+#2-level models 
+# cue.ln.ph <- lm(CUE ~ lnratio + soil.ph, data = hh_cue)
+# cue.ln.npoc <- lm(CUE ~ lnratio + soil.doc.mass.g, data = hh_cue)
+# cue.ln.inorg.n <- lm(CUE ~ lnratio + pct.n.post.ashing.bulk, data=hh_cue)
+# cue.ln.orgc <- lm(CUE ~ lnratio + org.c.in.total.bulk, data = hh_cue)
+# cue.cc.ph <- lm(CUE ~ litter.ccratio + soil.ph, data = hh_cue)
+# cue.cc.npoc <- lm(CUE ~ litter.ccratio + soil.doc.mass.g, data = hh_cue)
+# cue.cc.inorg.n <- lm(CUE ~ litter.ccratio + pct.n.post.ashing.bulk, data = hh_cue)
+# cue.cc.orgc <- lm(CUE ~ litter.ccratio + org.c.in.total.bulk, data = hh_cue)
+
+#this model set is redundant, try combining some
+
+
+#interaction models
+``` 
+
+
+Compare models
+*turned off this chunk because these models were mostly redundant
+```{ r}
+model.set <- list(cue.null, cue.lnratio, cue.litter.c, cue.litter.cc, cue.soil.ph, cue.npoc, cue.inorg.n, cue.org.c, cue.ln.ph, cue.ln.npoc, cue.ln.inorg.n, cue.ln.orgc, cue.cc.ph, cue.cc.npoc, cue.cc.inorg.n, cue.inorg.n, cue.cc.orgc)
+
+modnames <- c("cue.null", "cue.lnratio", "cue.litter.c", "cue.litter.cc", "cue.soil.ph", "cue.npoc", "cue.inorg.n", "cue.org.c", "cue.ln.ph", "cue.ln.npoc", "cue.ln.inorg.n", "cue.ln.orgc", "cue.cc.ph", "cue.cc.npoc", "cue.cc.inorg.n", "cue.inorg.n", "cue.cc.orgc")
+
+(cue.compare <- aictab(cand.set = model.set, modnames = modnames))
+``` 
+
+
+compare just the single models
+```{r}
+single.model.set <- list(cue.null, cue.lnratio, cue.litter.c, cue.litter.cc, cue.soil.ph, cue.npoc, cue.inorg.n, cue.org.c)
+
+single.modnames <- c("cue.null", "cue.lnratio", "cue.litter.c", "cue.litter.cc", "cue.soil.ph", "cue.npoc", "cue.inorg.n", "cue.org.c")
+
+(cue.compare <- aictab(cand.set = single.model.set, modnames = single.modnames))
+
+```
+
+Litter carbon carries 91% of the model weight, but the next-best models are still within delta-2 AIC: 
+
+Model selection based on AICc:
+
+              K    AICc Delta_AICc AICcWt Cum.Wt    LL
+cue.litter.c  3 -102.16       0.00   0.43   0.43 54.24
+cue.npoc      3 -101.04       1.11   0.25   0.68 53.68
+cue.inorg.n   3 -100.99       1.16   0.24   0.92 53.66
+cue.litter.cc 3  -98.06       4.10   0.06   0.97 52.19
+cue.null      2  -94.89       7.26   0.01   0.98 49.53
+cue.lnratio   3  -94.82       7.34   0.01   0.99 50.57
+cue.soil.ph   3  -92.73       9.43   0.00   1.00 49.54
+cue.org.c     3  -90.55      11.61   0.00   1.00 48.44
+
+``` {r}
+summary(cue.litter.c)
+#A small but significant increase in CUE (with increasing litter C (r2 = 0.05, p = 0.002).
+
+summary(cue.npoc)
+#small but significant decline in CUE with increasing DOC in the topsoil (r2 = -143.76, p = 0.001), but this relationship seems to be driven by a few outliers.
+
+summary(cue.inorg.n)
+#small but significant decrease in CUE with increasing inorganic N ()
+``` 
+
+
+Plot the data on a graph:
+```{r }
+(cue.litterc.plot <- ggplot(hh_cue, aes(x = litter.pct.c, y = CUE)) + 
+                              geom_point() +
+                              geom_smooth(method = "lm", color = " black"))
+
+(doc.cue.plot <- ggplot(hh_cue, aes(x = soil.doc.mass.g, y = CUE)) + 
+                              geom_point() +
+                              geom_smooth(method = "lm", color = " black"))
+
+(inorg.n.cue.plot <- ggplot(hh_cue, aes(x = pct.n.post.ashing.bulk, y = CUE)) + 
+                              geom_point() +
+                              geom_smooth(method = "lm", color = " black"))
+``` 
+
+
+Significant variation by litter cc ratio, but a way worse model than model 1 - only explains about half as much variation. Regardless, both have fairly low predictive power. 
+```{r }
+(cue.litter.cc.plot <- ggplot(hh_cue, aes(x = litter.ccratio, y = CUE)) + 
+                              geom_point() +
+                              geom_smooth(method = "lm", color = " black"))
+``` 
+
+
+Test the relationship between microbial cue and soil C distribution
+
+First get the normalized diri distribution
+```{r }
+names(hhout)
+
+
+levels(hhout$fractionated)
+#select out just the data with fraction info
+fraction_data <- hhout[hhout$fractionated=="y",]
+summary(fraction_data)
+
+#subset out just relevant variables
+fraction_data <- select(hhout, c(site, species, depth, fraction.code, org.c.mass.fraction))
+fraction_data <- fraction_data[complete.cases(fraction_data),]
+summary(fraction_data)
+
+#spread the values of fraction mass over fraction code
+fraction_wide <- spread(fraction_data, fraction.code, org.c.mass.fraction)
+fraction_wide <- fraction_wide[complete.cases(fraction_wide),]
+
+names(fraction_wide)
+summary(fraction_wide)
+#Make the FD normalized data
+
+
+fraction.diri <- FD.normalization(fraction_wide[,(4:6)])
+fraction.diri
+
+
+#bind the fraction data to the fraction diri
+fraction_wide <- cbind(fraction_wide, fraction.diri)
+summary(fraction_wide)
+
+fraction_wide <- fraction_wide[, -c(4:6)]
+head(fraction_wide)
+```
+
+
+Join the cue to the diri df
+```{r}
+fraction_wide_unique <- fraction_wide[unique(fraction_wide$site), ]
+summary(fraction_wide_unique)
+
+summary(cue_corrected)
+cue_corrected_drop <- cue_corrected[,-1]
+
+#join the cue data to the fraction wide data
+fraction_wide_cue <- join(fraction_wide_unique, cue_corrected_drop, type = "left")
+#check the join
+summary(fraction_wide_cue)
+length(fraction_wide_cue$site)
+fraction_wide_cue
+``` 
+
+
+Now do the correlation test
+```{r }
+orgs <- DR_data(fraction_wide_cue[,4:6])
+
+cue.mod <- DirichReg(orgs ~ CUE + depth, data = fraction_wide_cue)
+summary(cue.mod)
+``` 
+
+Microbial CUE is not related to soil organic carbon distribution among fractions. 
+
+This suggests that both microbial CUE and soc distribution are responses to litter chemistry.  
+
+
+
+
+
+
+

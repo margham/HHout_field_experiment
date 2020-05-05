@@ -1,0 +1,96 @@
+---
+title: "Total_soil_c_comparisons"
+author: "Becca"
+date: "5/1/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Comparing bulk organic C values (tons/hectare) for soil depths 1 and 2
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Read in data and libraries
+```{r }
+#install.packages("mice")
+library(mice)
+library(plyr)
+library(dplyr)
+
+hhout <- read.csv("hhout_master_01May2020.csv", header=TRUE)
+summary(hhout)
+hhout$depth <-as.factor(hhout$depth)
+summary(hhout$bulk.dens)
+#there are missing bulk density values but they represent a small number of sites and are interspersed among species, so we'll try to do an analysis without the missing data.
+```
+
+
+Calculate bulk soil organic C tons per hectare 
+```{r }
+#first make a cm depth variable
+hhout$depth.cm <- revalue(hhout$depth, c("1"="5", "2"="10", "3"="10", "4"="10"))
+#summary(hhout$depth)
+#summary(hhout$depth.cm)
+hhout$depth.cm <- as.numeric(as.character(hhout$depth.cm))
+summary(hhout$depth.cm)
+
+#calculate the tons per hectare
+hhout$tons.c.hectare <- (hhout$org.c.in.total.bulk * hhout$bulk.dens * hhout$depth.cm)
+summary(hhout$tons.c.hectare)
+```
+
+
+See whether species correlates with tons c per hectare
+```{r }
+totalc.lm <- aov(tons.c.hectare ~ species*depth, data = hhout)
+summary(totalc.lm)
+TukeyHSD(totalc.lm)
+```
+
+Fagus is significantly higher than all of the other species in depth 1 but there is no difference among species at depth 2. 
+
+See whether litter chemistry is associated with total soil C at depth 1
+```{r }
+hhout.depth1 <- subset(hhout, depth==1)
+
+totalc.litter.lm.1 <- lm(tons.c.hectare ~ litter.pct.c + litter.pct.n + litter.lignin.mg.g, data = hhout.depth1)
+summary(totalc.litter.lm.1)
+
+totalc.litter.interaction.lm.1 <- lm(tons.c.hectare ~ litter.pct.c + litter.pct.n*litter.lignin.mg.g, data = hhout.depth1)
+summary(totalc.litter.interaction.lm.1)
+```
+
+
+See whether litter chemistry is associated with total soil C at depth 2
+```{r }
+hhout.depth2 <- subset(hhout, depth==2)
+
+totalc.litter.lm.2 <- lm(tons.c.hectare ~ litter.pct.c + litter.pct.n + litter.lignin.mg.g, data = hhout.depth2)
+summary(totalc.litter.lm.2)
+
+totalc.litter.interaction.lm.2 <- lm(tons.c.hectare ~ litter.pct.c + litter.pct.n*litter.lignin.mg.g, data = hhout.depth2)
+summary(totalc.litter.interaction.lm.2)
+
+AIC(totalc.litter.lm.2, totalc.litter.interaction.lm.2)
+```
+The model without the interaction is better than the one with the interaction. 
+
+
+Is soil pH or moisture associated with total C at depth 1?
+```{r }
+totalc.soil.lm.1 <- lm(tons.c.hectare ~ soil.ph + pct.m, data = hhout.depth1)
+summary(totalc.soil.lm.1)
+```` 
+
+Soil pH has a negative relationship (higher pH = less C) at depth 1
+
+Is soil pH or moisture associated with total C at depth 2?
+```{r }
+totalc.soil.lm.2 <- lm(tons.c.hectare ~ soil.ph + pct.m, data = hhout.depth2)
+summary(totalc.soil.lm.2)
+```` 
+
+pH still has a negative correlation but it is not significant. 
