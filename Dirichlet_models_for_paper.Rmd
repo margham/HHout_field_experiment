@@ -16,6 +16,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 The purpose of this file is to remake the soil C distribution plots and statistics using the master data frame rather than the individual frames used in Dirichlet_distributions.
 
+The file will first 
+
+## 1: Setup 
 
 Load packages
 ```{r }
@@ -43,6 +46,8 @@ summary(bayesdf)
 #all.equal(hhout[hhout$fractionated=="y", ]$org.c.fraction.mass, bayesdf$org.c.fraction.mass) 
 ```
 
+
+## 2: Building intermediate dataframes - skip ahead to section 3
 
 Subset out the organic and inorganic fraction masses
 ```{ r }
@@ -137,26 +142,28 @@ hhout$npoc.mg.g <- (hhout$soil.npoc.mg.L * 0.04) / 5
 summary(hhout$npoc.mg.g)
 
 #change mg.g to g to match other soc numbers
-hhout$soil.doc.mass.g <- hhout$npoc.mg.g/1000
+hhout$soil.doc.mass.g <- hhout$npoc.mg.g/100
 summary(hhout$soil.doc.mass.g)
 
 # check whether this correlates with anything else
 soil.doc.lm <- lm(npoc.mg.g ~ soil.ph + litter.pct.c + sum.org.c.mass.fraction, data=hhout)
 summary(soil.doc.lm)
 
-write.csv(hhout, file = "hhout_master", row.names = FALSE)
+write.csv(hhout, file = "hhout_master_01May2020.csv", row.names = FALSE)
 ```
 
 So DOC increases along with soil pH, and decreases with sum organic c mass fraction (makes sense, since more DOC would mean less C in the solid fractions and vice-versa). 
 
 
-Run a dirichlet model for the organic C per solid fraction
+## 3: Quantify the distribution of soil organic carbon by litter chemistry and depth
+
+Build the dataframe
 ```{r}
 #subset the organic fraction values for the dirichlet model
 sub.org.wide <- read.csv("sub.org.wide.csv", header = TRUE)
 sub.org.wide$depth = as.factor(sub.org.wide$depth)
 
-npoc.for.join <- hhout[,c("site", "species", "depth", "soil.doc.mass.g")]
+npoc.for.join <- hhout[,c("site", "species", "depth","soil.ph", "soil.doc.mass.g")]
 sub.org.wide <- join(sub.org.wide, npoc.for.join, type="left")
 
 litter.for.join <- hhout[,c("site", "species", "depth", "litter.pct.c", "litter.pct.n", "litter.lignin.mg.g")]
@@ -166,36 +173,112 @@ sub.org.wide %>% distinct() -> sub.org.wide
 
 summary(sub.org.wide)
 
-orgs <- DR_data(sub.org.wide[,c(7:10)])
-
-#make a model with species and depth as predictors
-mod2 <- DirichReg(orgs ~ species + depth, data = sub.org.wide, model = "alternative")
-
-#use litter chemistry instead of species as a predictor
-mod3 <- DirichReg(orgs ~ litter.pct.c + litter.pct.n + depth, data = sub.org.wide)
-mod4 <- DirichReg(orgs ~ litter.pct.c + depth, data = sub.org.wide)
-mod5 <- DirichReg(orgs ~litter.lignin.mg.g + depth, data = sub.org.wide)
-
-#run the model summaries
-#summary(mod1)
-summary(mod2)
-summary(mod3)
-summary(mod4)
-summary(mod5)
-
-#compare AICs
-#AIC(mod1)
-AIC(mod2)
-AIC(mod3)
-AIC(mod4)
-AIC(mod5)
-#model 2 is the best, species + depth
-
+orgs <- DR_data(sub.org.wide[,c(7:9, 11)])
 ```
 
 
+Create some models to compare influence of different litter traits on C distribution. Use depth as an interactive factor because depth is very likely to influence the effect of some of these parameters on C distribution. 
+```{r }
+#make a model with species and depth as predictors
+c.mod1 <- DirichReg(orgs ~ species*depth, data = sub.org.wide, model = "alternative")
 
-## Plot the organic C distributions (solid fractions) by species at depths 1 and 2
+#use litter chemistry instead of species as a predictor
+c.mod2 <- DirichReg(orgs ~ litter.pct.n*depth, data = sub.org.wide, model = "alternative")
+c.mod3 <- DirichReg(orgs ~ litter.pct.c*depth, data = sub.org.wide, model = "alternative")
+c.mod4 <- DirichReg(orgs ~ litter.lignin.mg.g*depth, data = sub.org.wide, model = "alternative")
+
+#combine lignin and n into lnratio
+sub.org.wide$lnratio <- ((sub.org.wide$litter.lignin.mg.g/10)/sub.org.wide$litter.pct.n)
+summary(sub.org.wide$lnratio)
+
+c.mod5 <- DirichReg(orgs ~ lnratio*depth, data = sub.org.wide, model = "alternative")
+
+#see if soil ph is related to c distribution
+c.mod6 <- DirichReg(orgs ~ soil.ph*depth, data = sub.org.wide, model = "alternative")
+
+#run the model summaries
+#summary(mod1)
+summary(c.mod1)
+summary(c.mod2)
+summary(c.mod3)
+summary(c.mod4)
+summary(c.mod5)
+summary(c.mod6)
+
+#compare AICs
+#AIC(mod1)
+AIC(c.mod1)
+AIC(c.mod2)
+AIC(c.mod3)
+AIC(c.mod4)
+AIC(c.mod5)
+AIC(c.mod6)
+```
+
+The best moels (all within 1 delta-AIC of each other) are 5, 4, and 2 (lnratio, lignin, and nitrogen). I will move forward with model 5 (lnratio).
+
+Call:
+DirichReg(formula = orgs ~ lnratio * depth, data = sub.org.wide, model = "alternative")
+
+Standardized Residuals:
+                     Min       1Q   Median       3Q     Max
+org.pom.1        -3.0530  -0.4907  -0.2485   0.8173  5.1884
+org.sa.1         -2.0787  -0.6160  -0.0119   0.7225  3.0999
+org.sc.1         -3.3082  -0.6740   0.1294   0.6713  2.5103
+soil.doc.mass.g  -0.7478  -0.5649  -0.4818  -0.3522  0.1802
+
+MEAN MODELS:
+------------------------------------------------------------------
+Coefficients for variable no. 1: org.pom.1
+- variable omitted (reference category) -
+------------------------------------------------------------------
+Coefficients for variable no. 2: org.sa.1
+               Estimate Std. Error z value Pr(>|z|)   
+(Intercept)     0.10086    0.20949   0.481  0.63021   
+lnratio        -0.03266    0.01198  -2.725  0.00643 **
+depth2         -0.08988    0.34235  -0.263  0.79291   
+lnratio:depth2  0.01830    0.01940   0.943  0.34557   
+------------------------------------------------------------------
+Coefficients for variable no. 3: org.sc.1
+                Estimate Std. Error z value Pr(>|z|)    
+(Intercept)     1.398550   0.162282   8.618  < 2e-16 ***
+lnratio        -0.023472   0.009053  -2.593  0.00952 ** 
+depth2          0.536851   0.258437   2.077  0.03777 *  
+lnratio:depth2  0.003254   0.014431   0.225  0.82160    
+------------------------------------------------------------------
+Coefficients for variable no. 4: soil.doc.mass.g
+                Estimate Std. Error z value Pr(>|z|)    
+(Intercept)    -2.407391   0.419137  -5.744 9.26e-09 ***
+lnratio        -0.021445   0.023879  -0.898    0.369    
+depth2          0.546588   0.599973   0.911    0.362    
+lnratio:depth2  0.006925   0.034186   0.203    0.839    
+------------------------------------------------------------------
+
+PRECISION MODEL:
+------------------------------------------------------------------
+            Estimate Std. Error z value Pr(>|z|)    
+(Intercept)   3.9591     0.1088   36.38   <2e-16 ***
+------------------------------------------------------------------
+Significance codes: 0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Log-likelihood: 385.8 on 13 df (90 BFGS + 2 NR Iterations)
+AIC: -745.7, BIC: -718.5
+Number of Observations: 60
+Links: Logit (Means) and Log (Precision)
+Parametrization: alternative
+
+## 4: Visualize the results of the Dirichlet distribution 
+
+For visualization purposes, predict the values of each fraction across the observed lnratio values, then plot the moel fit against the observed data.
+```{r }
+predict
+```
+
+## 5: Plot the organic C distributions (solid fractions) by species at depths 1 and 2 using ternary plots
+
+I have turned all of these chunks off because I don't think that they're useful or interesting, plus they do not show the whole distribution. 
+
+Skip to section 6
 
 First depth 1
 ```{ r }
@@ -237,7 +320,7 @@ lines(dataEllipse(toTernary(DR_data(a[[6]])), draw=FALSE)$`0.95`,col=mycols3[[6]
 
 
 Do the same for depth 2
-```{r }
+```{ r }
 org.wide.2<-subset(sub.org.wide, depth==2)
 
 orgs2 <- DR_data(org.wide.2[,7:9])
@@ -272,7 +355,7 @@ lines(dataEllipse(toTernary(DR_data(b[[6]])), draw=FALSE)$`0.95`,col=mycols3[[6]
 
 
 Try redoing these ternary plots with ggtern
-```{r }
+```{ r }
 library(ggtern)
 
 #depth 1
@@ -284,13 +367,16 @@ ggtern(data=org.wide.2, aes(org.pom.1, org.sc.1, org.sa.1)) + theme_showarrows()
 
 Okay, I'm done with this, I don't think the ternary plots are interesting or helpful.
 
-## Make some more models 
+## 6: Visualize litter chemistry parameters by species (figure 4 in paper)
 
 First prepare the data frame
 ```{r }
 #read in the hhout_sub_wide_complete dataframe
 hhout_sub_wide_complete <- read.csv("hhout_sub_wide_complete.csv", header = TRUE)
 hhout_sub_wide_complete$depth <- as.factor(hhout_sub_wide_complete)
+summary(hhout_sub_wide_complete)
+
+.hhout_sub_wide_complete %>% distinct() -> hhout_sub_wide_complete
 
 #check names of the columns
 names(sub.org.wide)
@@ -303,6 +389,7 @@ summary(litter.dat)
 
 #join the litter and npoc data to the diri data
 sub.org.litter <- join(sub.org.wide, litter.dat, type = "full")
+sub.org.litter %>% distinct() -> sub.org.litter
 
 #make the lignin:n ratio variable
 sub.org.litter$lnratio <- (sub.org.litter$litter.lignin.mg.g/10)/sub.org.litter$litter.pct.n
@@ -318,41 +405,50 @@ hh_cue <- read.csv("hh_cue.csv", header = TRUE)
 sub.for.join <- hh_cue[,c(1,14,55)]
 sub.org.litter <- join(sub.org.litter, sub.for.join, type = "left")
 
+sub.org.litter %>% distinct() -> sub.org.litter
+
 summary(sub.org.litter)
+
 ```
- 
- 
-Plot lnratio and hwe-c by species
+
+
+Plot lnratio, litter c, litter n, and hwe-c by species
 ```{r }
 sub.org.litter$species <- with(sub.org.litter, reorder(species, lnratio, mean))
   
 (ln.species <- ggplot(sub.org.litter, aes(x=species, y=lnratio)) +
-   geom_point()) +
-   theme_bw()
+   geom_point() +
+   theme_bw())
 
 sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.hwec.mg.g, mean))
 
 (hwec.species <- ggplot(sub.org.litter, aes(x=species, y=litter.hwec.mg.g)) +
-    geom_point()) +
-    theme_bw()
+    geom_point() +
+    theme_bw())
 
 sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.pct.c, mean))
 
 (pctc.species <- ggplot(sub.org.litter, aes(x=species, y=litter.pct.c)) +
-    geom_point()) +
-    theme_bw()
+    geom_point() +
+    theme_bw())
+
+sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.pct.n, mean))
+
+(pctn.species <- ggplot(sub.org.litter, aes(x=species, y=litter.pct.n)) +
+    geom_point() +
+    theme_bw())
 ```
 
 
-Look at the relationship between litter chemistry, depth, and distribution of soil organic c
-```{r}
-#remake the orgs data using the sub.org.wide data frame
-orgs <- FD.normalization(na.omit(sub.org.litter[ ,c(4:6,10)]))
-orgs <- DR_data(orgs)
+Put the above plots together in a plot
+```{r }
+library(gridExtra)
+grid.arrange(pctc.species, pctn.species, hwec.species, ln.species, ncol = 2)
+
 ```
 
 
-check for autocorrelation
+check for autocorrelation among independent variables - I have turned off this block because the ggpairs() function can cause the script to hang.  
 ```{ r}
 #install.packages("GGally")
 library(GGally)
@@ -367,56 +463,10 @@ ggpairs(sub.org.litter[,c(2, 3, 7:14)])
 ```
 
 
-#make some candidate models
-```{r }
-random <- DirichReg(orgs ~ 1, data=na.omit(sub.org.litter)) 
-sp <- DirichReg(orgs ~ species, data=na.omit(sub.org.litter)) 
-depth <- DirichReg(orgs ~ depth, data=na.omit(sub.org.litter)) 
-lnratio <- DirichReg(orgs ~ lnratio, data=na.omit(sub.org.litter)) 
-site <- DirichReg(orgs ~ site, data=na.omit(sub.org.litter)) 
-hwec <- DirichReg(orgs ~ litter.hwec.mg.g, data=na.omit(sub.org.litter)) 
-pct.c <- DirichReg(orgs ~ litter.pct.c, data=na.omit(sub.org.litter))
-#AICtab doesn't work yet for this model class. 
-# Cand.set <- list(random, sp, depth, lnratio, site, npoc, hwec)
-# Cand.names <- c("random", "sp", "depth", "lnratio", "site", "npoc", "hwec")
-# aictab(Cand.set, modnames = Cand.names)
+## 7: Look at variation in the distribution of soil C fractions using distance matrices
 
-#do by hand
-random.aic <- AIC(random)
-sp.aic <- AIC(sp)
-depth.aic <- AIC(depth)
-lnratio.aic <- AIC(lnratio)
-site.aic <- AIC(site)
-hwec.aic <- AIC(hwec)
-pct.c <- AIC(pct.c)
+This is an alternate method to the dirichlet distribution for calculating differences in soil fractions according to litter chemistry. 
 
-#make into a table
-modname <- c("random", "sp", "depth", "lnratio", "site", "hwec", "pct.c")
-AIC <- c(random.aic, sp.aic, depth.aic, lnratio.aic, site.aic, hwec.aic, pct.c)
-
-#Diri AIC table
-diriAIC <- as.data.frame(cbind(modname, AIC))
-diriAIC$AIC <- as.numeric(as.character(diriAIC$AIC))
-is.numeric(diriAIC$AIC)
-is.factor(diriAIC$modname)
-diriAIC$modname <- with(diriAIC, reorder(modname, AIC, median))
-
-diriAIC
-#depth and site are the most important, but of course site would be because every site has a unique carbon distribution. No variables do worse than random (although hwec is close). 
-#Species is the next best predictor, even better than litte characteristics. 
-```
-
-
-Make some more complex models
-
-  * values that shouldn't go into the same model: 
-    - litter ln ratio and lignin, litter pct c, litter pct n, litter lignin mg, litter cell mg, litter hwe c ppm, 
-    - litter pct c and lignin, hwec, and lnratio
-    - litter hwec ppm and litter ln ratio (corr -0.98)
-
-Use depth and site as random variables, because they introduce spatial variation but for structural reasons. 
-
-Try a pcoa
 ```{r }
 library(vegan)
 
@@ -432,10 +482,11 @@ pcoa_df <- join(pcoa_df, npoc.for.join, type="left")
 summary(pcoa_df)
 
 pcoa_sub <- pcoa_df[ ,c(13:16)]
+summary(pcoa_sub)
   
 ##next get the distance matrix using vegdist
 #NEED TO ADD NPOC TO THIS
-soil.D<-vegdist(pcoa_sub, "bray")
+soil.D<-vegdist(pcoa_sub, "bray", na.rm = TRUE)
 
 #do the pcoa
 soilpcoa <- pcoa(soil.D, correction = "cailliez")
