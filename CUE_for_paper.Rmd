@@ -87,6 +87,8 @@ Plot CUE as function of different soil and litter parameters
 #write.csv(hh_cue, file = "hh_cue.csv", row.names = FALSE)
 
 hh_cue <- read.csv("hh_cue.csv", header=TRUE)
+hh_cue %>% distinct() -> hh_cue
+
 
 #HWE-c
 (cueplot1 <- ggplot(hh_cue, aes(x = litter.hwec.mg.g, y = CUE)) +
