@@ -16,8 +16,8 @@ knitr::opts_chunk$set(echo = TRUE)
 Read in data and libraries
 ```{r }
 #install.packages("mice")
-library(mice)
-library(plyr)
+library(tidyverse)
+library(stats)
 library(dplyr)
 
 hhout <- read.csv("hhout_master_01May2020.csv", header=TRUE)
@@ -37,9 +37,50 @@ hhout$depth.cm <- revalue(hhout$depth, c("1"="5", "2"="10", "3"="10", "4"="10"))
 hhout$depth.cm <- as.numeric(as.character(hhout$depth.cm))
 summary(hhout$depth.cm)
 
-#calculate the tons per hectare
+#calculate the tons organic C per hectare
 hhout$tons.c.hectare <- (hhout$org.c.in.total.bulk * hhout$bulk.dens * hhout$depth.cm)
 summary(hhout$tons.c.hectare)
+```
+
+
+Summarize bulk soil data for paper
+```{r}
+#first remove the fraction codes and select the unique values of bulk soil
+bulk_soil <- hhout[ , c("site", "species", "depth", "tons.c.hectare", "pct.n.pre.ashing.bulk", "pct.c.pre.ashing.bulk", "pct.n.in.org.fraction.bulk", "pct.c.in.org.fraction.bulk", "org.c.start.mass.bulk", "soil.ph", "bulk.dens", "pct.m", "soil.doc.mass.g")]
+
+#bulk_soil <- na.omit(bulk_soil)
+bulk_soil <- distinct(bulk_soil)
+summary(bulk_soil)
+
+#there is a mistake in the bulk density
+bulk_soil[bulk_soil$bulk.dens>2, ]
+#row 22, bulk density has been given same value as pH. Remove this value of bulk density
+bulk_soil$bulk.dens[c(22)] <- NA
+#check that it is gone
+bulk_soil[bulk_soil$bulk.dens>2, ]
+
+#summarize the data frame
+bulk_summary <- bulk_soil%>% 
+  dplyr::group_by(species, depth)%>% 
+  dplyr::summarize(
+    tons.c = mean(tons.c.hectare, na.rm = TRUE),
+    sd_tons.c = sd(tons.c.hectare, na.rm = TRUE),
+    pct.n.pre = mean(pct.n.pre.ashing.bulk, na.rm=TRUE),
+    pct.c.pre = mean(pct.c.pre.ashing.bulk, na.rm=TRUE),
+    pct.n.org = mean(pct.n.in.org.fraction.bulk, na.rm=TRUE), 
+    pct.c.org = mean(pct.c.in.org.fraction.bulk, na.rm=TRUE),
+    ph = mean(soil.ph, na.rm=TRUE), 
+    sd_ph = sd(soil.ph, na.rm=TRUE),
+    bulkdens = mean(bulk.dens, na.rm=TRUE),
+    sd_bd = sd(bulk.dens, na.rm=TRUE),
+    moist = mean(pct.m, na.rm=TRUE), 
+    sd_moist = sd(pct.m, na.rm=TRUE),
+    sd.n.pre = sd(pct.n.pre.ashing.bulk, na.rm=TRUE),
+    sd.org.n = sd(pct.n.in.org.fraction.bulk, na.rm=TRUE), 
+    sd.c.pre = sd(pct.c.pre.ashing.bulk, na.rm=TRUE), 
+    sd.org.c = sd(pct.c.in.org.fraction.bulk, na.rm=TRUE))
+print(bulk_summary, row.names = FALSE)
+write.csv(bulk_summary, file = "bulk.summary.csv", row.names = FALSE)
 ```
 
 
@@ -61,8 +102,10 @@ summary(totalc.litter.lm.1)
 
 totalc.litter.interaction.lm.1 <- lm(tons.c.hectare ~ litter.pct.c + litter.pct.n*litter.lignin.mg.g, data = hhout.depth1)
 summary(totalc.litter.interaction.lm.1)
-```
 
+AIC(totalc.litter.lm.1, totalc.litter.interaction.lm.1)
+```
+Almost identical in explanatory value. 
 
 See whether litter chemistry is associated with total soil C at depth 2
 ```{r }

@@ -39,7 +39,7 @@ The variables in the dataframe are as follows:
 20. **pct.c.in.org.fraction.bulk** is the percent carbon in the organic fraction of the bulk sample.
 21. **pct.org.c.in.whole.bulk** is the total percent organic carbon in the bulk sample.
 22. **pct.n.in.org.fraction.bulk** is the percent nitrogen in the organic fraction of the bulk sample.
-23. **pct.org.n.in.whole.bulk** is the total percent nitrogen in the total bulk sample.
+23. **pct.org.n.in.whole.bulk** is the total percent organic nitrogen in the total bulk sample.
 24. **soil.mass.pre.fract** is the starting weight (grams dry weight) of the soil sample used for fractionation.
 25. **fraction.mass** is the weight of the individual fractions (grams dry weight) of the individual soil fractions.
 26. **org.c.mass.fraction** is the weight (grams dry weight) of the organic carbon in the fraction.

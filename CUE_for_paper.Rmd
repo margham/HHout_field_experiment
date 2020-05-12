@@ -45,7 +45,7 @@ levels(cue_corrected$species)
 
 Read in the master dataframe
 ```{ r }
-hhout <- read.csv("hhout_master", header=TRUE)
+hhout <- read.csv("hhout_master_01May2020.csv", header=TRUE)
 summary(hhout)
 
 #make depth a factor
@@ -71,20 +71,20 @@ write.csv(hh_cue, file = "hh_cue.csv", row.names = FALSE)
 
 
 Plot CUE as function of different soil and litter parameters
-```{r }
+```{ r }
 #read in the combined dataframe
-# hh_cue <- read.csv("hh_cue.csv", header=TRUE)
-# summary(hh_cue)
-# hh_cue$depth = as.factor(hh_cue$depth)
+hh_cue <- read.csv("hh_cue.csv", header=TRUE)
+summary(hh_cue)
+hh_cue$depth = as.factor(hh_cue$depth)
 
 #calculate HWE-C as mg C per g dry weight litter
-# hhout$npoc.mg.g <- (hhout$soil.npoc.mg.L * 0.04) / 5
-# summary(hhout$npoc.mg.g)
-# hh_cue$litter.hwec.mg.g <- (hh_cue$litter.hwec.ppm * 0.2 / 2)
-# summary(hh_cue$litter.hwec.mg.g)
-# summary(hh_cue$litter.cell.mg.g)
+hhout$npoc.mg.g <- (hhout$soil.npoc.mg.L * 0.04) / 5
+summary(hhout$npoc.mg.g)
+hh_cue$litter.hwec.mg.g <- (hh_cue$litter.hwec.ppm * 0.2 / 2)
+summary(hh_cue$litter.hwec.mg.g)
+summary(hh_cue$litter.cell.mg.g)
 
-#write.csv(hh_cue, file = "hh_cue.csv", row.names = FALSE)
+write.csv(hh_cue, file = "hh_cue.csv", row.names = FALSE)
 
 hh_cue <- read.csv("hh_cue.csv", header=TRUE)
 hh_cue %>% distinct() -> hh_cue
@@ -93,7 +93,7 @@ hh_cue %>% distinct() -> hh_cue
 #HWE-c
 (cueplot1 <- ggplot(hh_cue, aes(x = litter.hwec.mg.g, y = CUE)) +
               geom_point()+
-              geom_smooth())
+              geom_smooth(method="lm"))
 
 #soil pH
 (cueplot2 <- ggplot(hh_cue, aes(x = soil.ph, y = CUE)) + 
@@ -202,10 +202,11 @@ cue.lnratio <- lm(CUE ~ lnratio, data = hh_cue)
 cue.litter.c <- lm(CUE ~ litter.pct.c, data = hh_cue)
 cue.litter.cc <- lm(CUE ~ litter.ccratio, data = hh_cue)
 cue.soil.ph <- lm(CUE ~ soil.ph, data=hh_cue)
-cue.npoc <- lm(CUE ~ soil.doc.mass.g, data = hh_cue)
+cue.doc <- lm(CUE ~ soil.doc.mass.g, data = hh_cue)
 cue.inorg.n <- lm(CUE ~ pct.n.post.ashing.bulk, data = hh_cue)
 cue.org.c <- lm(CUE ~ org.c.in.total.bulk, data = hh_cue)
-cue.
+cue.litter.lignin <- lm(CUE ~ litter.lignin.mg.g, data = hh_cue)
+cue.org.n <- lm(CUE ~ pct.n.in.total.bulk, data = hh_cue)
 
 #2-level models 
 # cue.ln.ph <- lm(CUE ~ lnratio + soil.ph, data = hh_cue)
@@ -237,9 +238,9 @@ modnames <- c("cue.null", "cue.lnratio", "cue.litter.c", "cue.litter.cc", "cue.s
 
 compare just the single models
 ```{r}
-single.model.set <- list(cue.null, cue.lnratio, cue.litter.c, cue.litter.cc, cue.soil.ph, cue.npoc, cue.inorg.n, cue.org.c)
+single.model.set <- list(cue.null, cue.lnratio, cue.litter.c, cue.litter.cc, cue.soil.ph, cue.doc, cue.inorg.n, cue.org.c, cue.litter.lignin, cue.org.n)
 
-single.modnames <- c("cue.null", "cue.lnratio", "cue.litter.c", "cue.litter.cc", "cue.soil.ph", "cue.npoc", "cue.inorg.n", "cue.org.c")
+single.modnames <- c("cue.null", "cue.lnratio", "cue.litter.c", "cue.litter.cc", "cue.soil.ph", "cue.doc", "cue.inorg.n", "cue.org.c", "cue.litter.lignin", "cue.org.n")
 
 (cue.compare <- aictab(cand.set = single.model.set, modnames = single.modnames))
 
@@ -249,25 +250,29 @@ Litter carbon carries 91% of the model weight, but the next-best models are stil
 
 Model selection based on AICc:
 
-              K    AICc Delta_AICc AICcWt Cum.Wt    LL
-cue.litter.c  3 -102.16       0.00   0.43   0.43 54.24
-cue.npoc      3 -101.04       1.11   0.25   0.68 53.68
-cue.inorg.n   3 -100.99       1.16   0.24   0.92 53.66
-cue.litter.cc 3  -98.06       4.10   0.06   0.97 52.19
-cue.null      2  -94.89       7.26   0.01   0.98 49.53
-cue.lnratio   3  -94.82       7.34   0.01   0.99 50.57
-cue.soil.ph   3  -92.73       9.43   0.00   1.00 49.54
-cue.org.c     3  -90.55      11.61   0.00   1.00 48.44
+                  K    AICc Delta_AICc AICcWt Cum.Wt    LL
+cue.litter.c      3 -102.16       0.00   0.42   0.42 54.24
+cue.doc           3 -101.04       1.11   0.24   0.67 53.68
+cue.inorg.n       3 -100.99       1.16   0.24   0.90 53.66
+cue.litter.cc     3  -98.06       4.10   0.05   0.96 52.19
+cue.litter.lignin 3  -95.29       6.87   0.01   0.97 50.80
+cue.null          2  -94.89       7.26   0.01   0.98 49.53
+cue.lnratio       3  -94.82       7.34   0.01   0.99 50.57
+cue.soil.ph       3  -92.73       9.43   0.00   1.00 49.54
+cue.org.n         3  -91.95      10.20   0.00   1.00 49.14
+cue.org.c         3  -90.55      11.61   0.00   1.00 48.44
+
+
 
 ``` {r}
 summary(cue.litter.c)
-#A small but significant increase in CUE (with increasing litter C (r2 = 0.05, p = 0.002).
+#A small but significant increase in CUE (with increasing litter C (est = 0.05, p = 0.002).
 
-summary(cue.npoc)
-#small but significant decline in CUE with increasing DOC in the topsoil (r2 = -143.76, p = 0.001), but this relationship seems to be driven by a few outliers.
+summary(cue.doc)
+#small but significant decline in CUE with increasing DOC in the topsoil (est. = -143.76, p = 0.001), but this relationship seems to be driven by a few outliers.
 
 summary(cue.inorg.n)
-#small but significant decrease in CUE with increasing inorganic N ()
+#small but significant decrease in CUE with increasing inorganic N (est.=-85.34, p=0.004)
 ``` 
 
 
@@ -295,6 +300,63 @@ Significant variation by litter cc ratio, but a way worse model than model 1 - o
 ``` 
 
 
+Combine these parameters into a model
+```{r }
+#cue.lnratio <- lm(CUE ~ lnratio, data = hh_cue)
+
+cue.combined.model <- lm(CUE ~ litter.pct.c + soil.doc.mass.g + pct.n.post.ashing.bulk, data = hh_cue) 
+
+summary(cue.combined.model)
+plot(cue.combined.model)
+#residual plot shows significant deviations at the edges, is there a better model fit for this?
+```
+
+
+Plot the variation in CUE as function of the 3 main parameters
+```{r }
+#try a linear regression with litter C as the x axis and soil inorganic N as a factor with 3 levels
+summary(hh_cue$pct.n.post.ashing.bulk)
+#about a two-fold variation in N 
+
+#make a new dataframe with predicted y values for making the regression
+plotting.data <- expand.grid(
+  litter.pct.c = seq(min(hh_cue$litter.pct.c), max(hh_cue$litter.pct.c), length.out = 30), 
+  soil.doc.mass.g = seq(min(na.omit(hh_cue$soil.doc.mass.g)), max(na.omit(hh_cue$soil.doc.mass.g))),
+  pct.n.post.ashing.bulk = c(min(hh_cue$pct.n.post.ashing.bulk), mean(hh_cue$pct.n.post.ashing.bulk), max(hh_cue$pct.n.post.ashing.bulk))
+)
+
+#predict new y values
+plotting.data$predicted.y <- predict.lm(cue.combined.model, newdata = plotting.data)
+
+
+#round off the pct.n values
+plotting.data$pct.n.post.ashing.bulk <- round(plotting.data$pct.n.post.ashing.bulk, digits = 5)
+
+#make pct n a factor
+plotting.data$pct.n.post.ashing.bulk <- as.factor(as.character(plotting.data$pct.n.post.ashing.bulk))
+
+#check the data
+summary(plotting.data)
+
+#plot the raw data
+(cue.plot <- ggplot(hh_cue, aes(x = litter.pct.c, y = CUE)) +
+  geom_point())
+
+#add the regression lines
+(cue.plot <- cue.plot + 
+    geom_line(data = plotting.data, aes(x=litter.pct.c, y=predicted.y, color=pct.n.post.ashing.bulk), size=1.25))
+
+#add the formatting
+(cue.plot <- cue.plot +
+    theme_bw()+
+    labs(title = "Microbial Carbon-Use Efficiency as a function of litter carbon, \n inorganic nitrogen and dissolved organic carbon \n in the topsoil", 
+         x = "Litter Carbon (% of leaf mass)", 
+         y = "Microbial CUE", 
+         color = "Soil inorganic N \n (% of total \n topsoil (0-5cm) mass)") +
+    annotate(geom="text", x = 55.2, y=0.5, label = "CUE = -2.74 + (0.06*litter carbon) + \n (-11.23*soil DOC) + (-83.18*soil inorganic N)"))
+``` 
+
+
 Test the relationship between microbial cue and soil C distribution
 
 First get the normalized diri distribution
@@ -308,7 +370,7 @@ fraction_data <- hhout[hhout$fractionated=="y",]
 summary(fraction_data)
 
 #subset out just relevant variables
-fraction_data <- select(hhout, c(site, species, depth, fraction.code, org.c.mass.fraction))
+fraction_data <- select(hhout, c(site, species, depth, fraction.code, org.c.mass.fraction, soil.doc.mass.g))
 fraction_data <- fraction_data[complete.cases(fraction_data),]
 summary(fraction_data)
 
@@ -321,7 +383,7 @@ summary(fraction_wide)
 #Make the FD normalized data
 
 
-fraction.diri <- FD.normalization(fraction_wide[,(4:6)])
+fraction.diri <- FD.normalization(fraction_wide[,(3:6)])
 fraction.diri
 
 
@@ -353,9 +415,9 @@ fraction_wide_cue
 
 Now do the correlation test
 ```{r }
-orgs <- DR_data(fraction_wide_cue[,4:6])
+orgs <- DR_data(fraction_wide_cue[,4:7])
 
-cue.mod <- DirichReg(orgs ~ CUE + depth, data = fraction_wide_cue)
+cue.mod <- DirichReg(orgs ~ CUE*depth, data = fraction_wide_cue)
 summary(cue.mod)
 ``` 
 
