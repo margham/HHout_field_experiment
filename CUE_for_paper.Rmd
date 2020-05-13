@@ -423,9 +423,33 @@ summary(cue.mod)
 
 Microbial CUE is not related to soil organic carbon distribution among fractions. 
 
-This suggests that both microbial CUE and soc distribution are responses to litter chemistry.  
+This suggests that both microbial CUE and soc distribution are responses to litter chemistry and that CUE in itself is not causing variation in soil C distribution. 
+
+What about differences in total C?
+
+First recalculate the tons c/hectare as calculated in the Dirichlet Models script:
+```{r }
+#first make a cm depth variable
+hhout$depth.cm <- revalue(hhout$depth, c("1"="5", "2"="10", "3"="10", "4"="10"))
+#summary(hhout$depth)
+#summary(hhout$depth.cm)
+hhout$depth.cm <- as.numeric(as.character(hhout$depth.cm))
+summary(hhout$depth.cm)
+
+#there is a mistake in the bulk density
+hhout[hhout$bulk.dens>2, ]
+
+#calculate the tons organic C per hectare
+hhout$tons.c.hectare <- hhout$org.c.in.total.bulk * hhout$bulk.dens * hhout$depth.cm
+summary(hhout$tons.c.hectare)
+``` 
 
 
+Next calculate whether CUE is related to tons c per hectare
+```{r }
+
+
+``` 
 
 
 

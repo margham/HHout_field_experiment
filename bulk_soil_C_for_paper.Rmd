@@ -37,8 +37,13 @@ hhout$depth.cm <- revalue(hhout$depth, c("1"="5", "2"="10", "3"="10", "4"="10"))
 hhout$depth.cm <- as.numeric(as.character(hhout$depth.cm))
 summary(hhout$depth.cm)
 
+#there is a mistake in the bulk density
+hhout[hhout$bulk.dens>2, ]
+#row 22, bulk density has been given same value as pH. Remove this value of bulk density
+hhout$bulk.dens[c(64:66)] <- NA
+
 #calculate the tons organic C per hectare
-hhout$tons.c.hectare <- (hhout$org.c.in.total.bulk * hhout$bulk.dens * hhout$depth.cm)
+hhout$tons.c.hectare <- hhout$org.c.in.total.bulk * hhout$bulk.dens * hhout$depth.cm
 summary(hhout$tons.c.hectare)
 ```
 
@@ -52,12 +57,6 @@ bulk_soil <- hhout[ , c("site", "species", "depth", "tons.c.hectare", "pct.n.pre
 bulk_soil <- distinct(bulk_soil)
 summary(bulk_soil)
 
-#there is a mistake in the bulk density
-bulk_soil[bulk_soil$bulk.dens>2, ]
-#row 22, bulk density has been given same value as pH. Remove this value of bulk density
-bulk_soil$bulk.dens[c(22)] <- NA
-#check that it is gone
-bulk_soil[bulk_soil$bulk.dens>2, ]
 
 #summarize the data frame
 bulk_summary <- bulk_soil%>% 
