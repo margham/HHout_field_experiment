@@ -244,6 +244,7 @@ single.modnames <- c("cue.null", "cue.lnratio", "cue.litter.c", "cue.litter.cc",
 
 (cue.compare <- aictab(cand.set = single.model.set, modnames = single.modnames))
 
+
 ```
 
 Litter carbon carries 42% of the model weight, but the next-best models are still within delta-2 AIC: 
@@ -307,10 +308,20 @@ Combine these parameters into a model
 cue.combined.model <- lm(CUE ~ litter.pct.c + soil.doc.mass.g + pct.n.post.ashing.bulk, data = hh_cue) 
 
 summary(cue.combined.model)
+AIC(cue.combined.model)
+
 plot(cue.combined.model)
 #residual plot shows significant deviations at the edges, is there a better model fit for this?
 ```
 
+Compare model to single models
+```{r }
+multiple.model.set <- list(cue.null, cue.lnratio, cue.litter.c, cue.litter.cc, cue.soil.ph, cue.doc, cue.inorg.n, cue.org.c, cue.litter.lignin, cue.org.n, cue.combined.model)
+
+multiple.modnames <- c("cue.null", "cue.lnratio", "cue.litter.c", "cue.litter.cc", "cue.soil.ph", "cue.doc", "cue.inorg.n", "cue.org.c", "cue.litter.lignin", "cue.org.n", "cue.combined.model")
+
+(cue.combined.compare <- aictab(cand.set = multiple.model.set, modnames = multiple.modnames))
+```
 
 Plot the variation in CUE as function of the 3 main parameters
 ```{r }
