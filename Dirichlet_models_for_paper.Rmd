@@ -270,8 +270,85 @@ Parametrization: alternative
 ## 4: Visualize the results of the Dirichlet distribution 
 
 For visualization purposes, predict the values of each fraction across the observed lnratio values, then plot the moel fit against the observed data.
+
+First prepare the prediction data
 ```{r }
-predict
+#turn the sub.org.wide data from wide to long
+sub.org.long <- sub.org.wide%>%pivot_longer(
+  cols = c(soil.doc.mass.g, org.pom.1, org.sa.1, org.sc.1), 
+  names_to = "fraction.code", 
+  values_to = "proportion")
+
+#make the factors back into factors
+sub.org.long$fraction.code <- as.factor(sub.org.long$fraction.code)
+sub.org.long$depth <- as.factor(sub.org.long$depth)
+summary(sub.org.long)
+
+
+#make depth a number for this step 
+sub.org.long$depth <- as.numeric(sub.org.long$depth)
+
+#first predict the values from the dirichlet model
+dirichlet.plot.data <- expand.grid( 
+  lnratio = seq(min(sub.org.long$lnratio), max(sub.org.long$lnratio), length.out = 30),
+  depth = c(min(sub.org.long$depth), max(sub.org.long$depth))) 
+summary(dirichlet.plot.data)
+
+
+#make depth a factor again, clean up the data frame
+dirichlet.plot.data$depth <- as.factor(dirichlet.plot.data$depth)
+dirichlet.plot.data %>% distinct() -> dirichlet.plot.data
+summary(dirichlet.plot.data)
+length(dirichlet.plot.data$lnratio)
+
+#predict the values of the different variables under the dirichlet model
+predicted.data <- predict.DirichletRegModel(c.mod5, newdata = dirichlet.plot.data, type = "link", se = TRUE)
+#V1 = POM
+#V2 = SA
+#V3 = SC
+#V4 = DOC
+
+#make the matrix into a data frame
+predicted.data <- as.data.frame(predicted.data)
+summary(predicted.data)
+
+#change names to fraction code
+predicted.data <- predicted.data%>%rename(
+  pom = V1, 
+  sa = V2,
+  sc = V3,
+  doc = V4)
+summary(predicted.data)
+is.data.frame(predicted.data)
+
+#combine the predicted.data and the dirichlet plot data using cbind
+dirichlet.plot.data <- cbind(dirichlet.plot.data, predicted.data)
+summary(dirichlet.plot.data)
+
+#turn the predicted values from wide to long
+dirichlet.plot.data <- dirichlet.plot.data%>%pivot_longer(
+  cols = c(pom, sa, sc, doc), 
+  names_to = "fraction", 
+  values_to = "proportion")
+
+dirichlet.plot.data$fraction <- as.factor(dirichlet.plot.data$fraction)
+summary(dirichlet.plot.data)
+```
+
+
+Plot the raw data and model fits
+```{r }
+#subset the hhout data for plotting
+hhout.sub <- hhout[hhout$fractionated=="y", ]
+
+#geom_line(data = plotting.data, aes(x=litter.pct.c, y=predicted.y, color=pct.n.post.ashing.bulk), size=1.25))
+jitter <- position_jitter(width = 0.5)
+
+(dirichlet.plot <- ggplot(sub.org.long, aes(x=lnratio, y=proportion)) +
+                        geom_jitter(aes(color = fraction.code)) +
+                        geom_smooth(data = dirichlet.plot.data, aes(x=lnratio, y=proportion, color = fraction))+
+                        facet_wrap(~depth) +
+                        theme_bw())
 ```
 
 ## 5: Plot the organic C distributions (solid fractions) by species at depths 1 and 2 using ternary plots

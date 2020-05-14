@@ -246,7 +246,7 @@ single.modnames <- c("cue.null", "cue.lnratio", "cue.litter.c", "cue.litter.cc",
 
 ```
 
-Litter carbon carries 91% of the model weight, but the next-best models are still within delta-2 AIC: 
+Litter carbon carries 42% of the model weight, but the next-best models are still within delta-2 AIC: 
 
 Model selection based on AICc:
 
@@ -383,7 +383,7 @@ summary(fraction_wide)
 #Make the FD normalized data
 
 
-fraction.diri <- FD.normalization(fraction_wide[,(3:6)])
+fraction.diri <- FD.normalization(fraction_wide[,(4:7)])
 fraction.diri
 
 
@@ -391,7 +391,7 @@ fraction.diri
 fraction_wide <- cbind(fraction_wide, fraction.diri)
 summary(fraction_wide)
 
-fraction_wide <- fraction_wide[, -c(4:6)]
+fraction_wide <- fraction_wide[, -c(4:7)]
 head(fraction_wide)
 ```
 
@@ -409,7 +409,7 @@ fraction_wide_cue <- join(fraction_wide_unique, cue_corrected_drop, type = "left
 #check the join
 summary(fraction_wide_cue)
 length(fraction_wide_cue$site)
-fraction_wide_cue
+summary(fraction_wide_cue)
 ``` 
 
 
@@ -442,14 +442,22 @@ hhout[hhout$bulk.dens>2, ]
 #calculate the tons organic C per hectare
 hhout$tons.c.hectare <- hhout$org.c.in.total.bulk * hhout$bulk.dens * hhout$depth.cm
 summary(hhout$tons.c.hectare)
+
+#join tons.c.hectare to the hh_cue data
+tons.c.for.join <- hhout[, c("site", "species", "depth", "tons.c.hectare")]
+hh_cue <- join(hh_cue, tons.c.for.join, type = "left")
+
+summary(hh_cue)
 ``` 
 
 
-Next calculate whether CUE is related to tons c per hectare
+Next calculate whether CUE is related to tons c per hectare in the top 2 layers
 ```{r }
-
-
+cue.c.mass <- lm(tons.c.hectare ~ CUE, data = hh_cue)
+summary(cue.c.mass)
+#nope
 ``` 
+
 
 
 
