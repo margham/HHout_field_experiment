@@ -453,7 +453,7 @@ hhout_sub_wide_complete <- read.csv("hhout_sub_wide_complete.csv", header = TRUE
 hhout_sub_wide_complete$depth <- as.factor(hhout_sub_wide_complete)
 summary(hhout_sub_wide_complete)
 
-.hhout_sub_wide_complete %>% distinct() -> hhout_sub_wide_complete
+hhout_sub_wide_complete %>% distinct() -> hhout_sub_wide_complete
 
 #check names of the columns
 names(sub.org.wide)
@@ -497,19 +497,19 @@ sub.org.litter$species <- with(sub.org.litter, reorder(species, lnratio, mean))
    geom_point() +
    theme_bw())
 
-sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.hwec.mg.g, mean))
+#sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.hwec.mg.g, mean))
 
 (hwec.species <- ggplot(sub.org.litter, aes(x=species, y=litter.hwec.mg.g)) +
     geom_point() +
     theme_bw())
 
-sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.pct.c, mean))
+#sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.pct.c, mean))
 
 (pctc.species <- ggplot(sub.org.litter, aes(x=species, y=litter.pct.c)) +
     geom_point() +
     theme_bw())
 
-sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.pct.n, mean))
+#sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.pct.n, mean))
 
 (pctn.species <- ggplot(sub.org.litter, aes(x=species, y=litter.pct.n)) +
     geom_point() +
@@ -520,7 +520,7 @@ sub.org.litter$species <- with(sub.org.litter, reorder(species, litter.pct.n, me
 Put the above plots together in a plot
 ```{r }
 library(gridExtra)
-grid.arrange(pctc.species, pctn.species, hwec.species, ln.species, ncol = 2)
+grid.arrange(ln.species, pctc.species, pctn.species, hwec.species, ncol = 2)
 
 ```
 
@@ -544,7 +544,7 @@ ggpairs(sub.org.litter[,c(2, 3, 7:14)])
 
 This is an alternate method to the dirichlet distribution for calculating differences in soil fractions according to litter chemistry. 
 
-```{r }
+```{ r }
 library(vegan)
 
 #transform compositional data
@@ -576,7 +576,7 @@ biplot(soilpcoa)
 The PCoA suffered from the horseshoe effect.
 
 Try an NMDS with envfit()
-```{r }
+```{ r }
 #check the stress vs. dimension plot
 NMDS.scree <- function(x) { #where x is the name of the data frame variable
   plot(rep(1, 10), replicate(10, metaMDS(x, autotransform = F, k = 1)$stress), xlim = c(1, 10),ylim = c(0, 0.30), xlab = "# of Dimensions", ylab = "Stress", main = "NMDS stress plot")
@@ -617,7 +617,7 @@ plot(ef, p.max = 0.05)
 
 
 Does soil npoc vary by litter chemistry?
-```{r }
+```{ r }
 pcoa.npoc<-hhout[hhout$fractionated=="y", c("site", "species", "depth", "")]
 pcoa.npoc
 pcoa_env_df <- join(pcoa_env_df, pcoa.npoc, type = "left")
@@ -631,7 +631,7 @@ summary(npocmod2)
 
 
 Okay, so npoc does vary with litter chemistry. Try adding the hwec.mg.g to the envfit
-```{r }
+```{ r }
 
 # do the nmds
 # no convergent solutions with k=3, reduce to 2 dimensions
