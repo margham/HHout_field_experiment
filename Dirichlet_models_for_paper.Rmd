@@ -359,27 +359,38 @@ jitter <- position_jitter(width = 0.5)
 model.mean <- unlist(coef(c.mod5))
 model.sig <- vcov(c.mod5)
 
-sims <- rmvnorm(1, mean = model.mean, sigma = diag(x = 0,nrow = 13, ncol = 13))
+sims <- rmvnorm(100, mean = model.mean, sigma = model.sig)
+
+lnrange <- seq(5,25,length.out = 100)
+pred.matrix <- expand.grid(intercept = 1, lnratio = lnrange, depth = 0, interaction = 0)
+
+etas <- lapply(1:dim(sims)[1], function(x) {
+  cbind(as.matrix(pred.matrix) %*% sims[x,1:4],
+        as.matrix(pred.matrix) %*% sims[x,5:8],
+        as.matrix(pred.matrix) %*% sims[x,9:12])
+})
+
+mus <- abind(lapply(etas, calcProp), along = 3)
+
+upper <- apply(mus , c(1,2), quantile, probs = 0.975)
+lower <- apply(mus , c(1,2), quantile, probs =0.025)
 
 
 
-# depth1 only
-pred.matrix <- expand.grid(intercept = 1, lnratio = seq(0,25,length.out = 100),
-                            depth2 = 0, interaction = 0)
-
-pred.values <- cbind(as.matrix(pred.matrix) %*% sims[1:4],
-                     as.matrix(pred.matrix) %*% sims[5:8],
-                     as.matrix(pred.matrix) %*% sims[9:12])
 
 
 # start plot with pom
 plot(orgs[,1] ~ sub.org.wide$lnratio,
-     ylim = c(0,1), xlim = c(5,30),
+     ylim = c(0,1), xlim = c(5,25),
      ylab = "Proportion",
      xlab = "lignin-N ratio")
 
 lines(dirichlet.plot.data$lnratio[dirichlet.plot.data$fraction=="pom"&dirichlet.plot.data$depth ==1], dirichlet.plot.data$proportion[dirichlet.plot.data$fraction=="pom"&dirichlet.plot.data$depth ==1],
       lwd = 2)
+
+
+lines(lnrange, upper[,1], lty  = 2)
+lines(lnrange, lower[,1], lty  = 2)
 
 
 
