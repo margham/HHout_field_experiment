@@ -356,6 +356,20 @@ jitter <- position_jitter(width = 0.5)
 
 ```{r}
 
+model.mean <- unlist(coef(c.mod5))
+model.sig <- vcov(c.mod5)
+
+sims <- rmvnorm(1, mean = model.mean, sigma = diag(0.001, nrow = 13))
+
+
+
+# depth1 only
+pred.matrix <- expand.grid(intercept = 1, lnratio = seq(5,25,length.out = 100),
+                            depth2 = 0, interaction = 0)
+
+pred.values <- cbind(as.matrix(pred.matrix) %*% sims[1:4],
+                     as.matrix(pred.matrix) %*% sims[5:8],
+                     as.matrix(pred.matrix) %*% sims[9:12])
 
 
 # start plot with pom
