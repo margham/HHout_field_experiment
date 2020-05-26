@@ -31,6 +31,7 @@ library(FlexDir)
 library(DirichletReg)
 library(AICcmodavg)
 library(ape)
+library(mvtnorm)
 ```
 
 
@@ -290,7 +291,7 @@ sub.org.long$depth <- as.numeric(sub.org.long$depth)
 
 #first predict the values from the dirichlet model
 dirichlet.plot.data <- expand.grid( 
-  lnratio = seq(min(sub.org.long$lnratio), max(sub.org.long$lnratio), length.out = 30),
+  lnratio = seq(min(sub.org.long$lnratio), max(sub.org.long$lnratio), length.out = 100),
   depth = c(min(sub.org.long$depth), max(sub.org.long$depth))) 
 summary(dirichlet.plot.data)
 
@@ -313,7 +314,7 @@ predicted.data <- as.data.frame(predicted.data)
 summary(predicted.data)
 
 #change names to fraction code
-predicted.data <- predicted.data%>%rename(
+predicted.data <- predicted.data%>%dplyr::rename(
   pom = V1, 
   sa = V2,
   sc = V3,
@@ -349,6 +350,26 @@ jitter <- position_jitter(width = 0.5)
                         geom_smooth(data = dirichlet.plot.data, aes(x=lnratio, y=proportion, color = fraction))+
                         facet_wrap(~depth) +
                         theme_bw())
+```
+
+*WORKING* Plot same data (for depth 1) including bootstrap confidence regions in 'base' graphics.
+
+```{r}
+
+
+
+# start plot with pom
+plot(orgs[,1] ~ sub.org.wide$lnratio,
+     ylim = c(0,1), xlim = c(5,30),
+     ylab = "Proportion",
+     xlab = "lignin-N ratio")
+
+lines(dirichlet.plot.data$lnratio[dirichlet.plot.data$fraction=="pom"&dirichlet.plot.data$depth ==1], dirichlet.plot.data$proportion[dirichlet.plot.data$fraction=="pom"&dirichlet.plot.data$depth ==1],
+      lwd = 2)
+
+
+
+
 ```
 
 ## 5: Plot the organic C distributions (solid fractions) by species at depths 1 and 2 using ternary plots
