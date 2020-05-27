@@ -32,6 +32,8 @@ library(DirichletReg)
 library(AICcmodavg)
 library(ape)
 library(mvtnorm)
+library(abind)
+source("calcProps.R")
 ```
 
 
@@ -359,7 +361,7 @@ jitter <- position_jitter(width = 0.5)
 model.mean <- unlist(coef(c.mod5))
 model.sig <- vcov(c.mod5)
 
-sims <- rmvnorm(100, mean = model.mean, sigma = model.sig)
+sims <- rmvnorm(1000, mean = model.mean, sigma = model.sig)
 
 lnrange <- seq(5,25,length.out = 100)
 pred.matrix <- expand.grid(intercept = 1, lnratio = lnrange, depth = 0, interaction = 0)
@@ -392,10 +394,19 @@ lines(dirichlet.plot.data$lnratio[dirichlet.plot.data$fraction=="pom"&dirichlet.
 lines(lnrange, upper[,1], lty  = 2)
 lines(lnrange, lower[,1], lty  = 2)
 
+lines(dirichlet.plot.data$lnratio[dirichlet.plot.data$fraction=="sc"&dirichlet.plot.data$depth ==1], dirichlet.plot.data$proportion[dirichlet.plot.data$fraction=="sc"&dirichlet.plot.data$depth ==1],
+      lwd = 2)
+lines(lnrange, upper[,3], lty  = 2)
+lines(lnrange, lower[,3], lty  = 2)
+
+# with ggplot
+
+pom.quants <- data.frame(ln = lnrange,upper = upper[,1], lower = lower[,1])
+
+ggplot(data = sub.org.long, aes(y = proportion, x = lnratio)) + geom_ribbon(data =pom.quants,  aes(x = ln, y= lower, ymin = lower, ymax = upper), stat="identity", col = "blue", alpha = 0.2) + ylim(0,0.7)
+ ```
 
 
-
-```
 
 ## 5: Plot the organic C distributions (solid fractions) by species at depths 1 and 2 using ternary plots
 
