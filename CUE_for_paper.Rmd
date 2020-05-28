@@ -26,6 +26,7 @@ library(DirichletReg)
 ```
 
 
+
 Load CUE data and make the species levels match with the master dataframe
 ```{ r }
 cue <- read.csv("field_CUE_17.csv", header=TRUE)
@@ -71,7 +72,7 @@ write.csv(hh_cue, file = "hh_cue.csv", row.names = FALSE)
 
 
 Plot CUE as function of different soil and litter parameters
-```{ r }
+```{r }
 #read in the combined dataframe
 hh_cue <- read.csv("hh_cue.csv", header=TRUE)
 summary(hh_cue)
@@ -102,6 +103,7 @@ hh_cue %>% distinct() -> hh_cue
 #litter lignin.n.ratio
 #first make the ln ratio variable
 hh_cue$lnratio <- (hh_cue$litter.lignin.mg.g/10)/hh_cue$litter.pct.n
+
 #now make the plot
 (cueplot3 <- ggplot(hh_cue, aes(x = lnratio, y=CUE)) + 
               geom_point() + geom_jitter() + geom_smooth(method="lm")) 
@@ -112,7 +114,7 @@ hh_cue$lnratio <- (hh_cue$litter.lignin.mg.g/10)/hh_cue$litter.pct.n
               geom_point())
 ```
 
-There's just a huge range in CUE, doesn't seem to have a pattern. 
+There's just a huge range in CUE, doesn't seem to have a spatial pattern. 
 
 Make a model set based on potentially-important parameters.
 
@@ -323,6 +325,10 @@ multiple.modnames <- c("cue.null", "cue.lnratio", "cue.litter.c", "cue.litter.cc
 (cue.combined.compare <- aictab(cand.set = multiple.model.set, modnames = multiple.modnames))
 ```
 
+Why would lknratio be worse than the null model in the single model comparisons and have 100% of the model weight in this comparison?
+
+
+
 Plot the variation in CUE as function of the 3 main parameters
 ```{r }
 #try a linear regression with litter C as the x axis and soil inorganic N as a factor with 3 levels
@@ -331,7 +337,7 @@ summary(hh_cue$pct.n.post.ashing.bulk)
 
 #make a new dataframe with predicted y values for making the regression
 plotting.data <- expand.grid(
-  litter.pct.c = seq(min(hh_cue$litter.pct.c), max(hh_cue$litter.pct.c), length.out = 30), 
+  litter.pct.c = seq(min(hh_cue$litter.pct.c), max(hh_cue$litter.pct.c), length.out = 33), 
   soil.doc.mass.g = seq(min(na.omit(hh_cue$soil.doc.mass.g)), max(na.omit(hh_cue$soil.doc.mass.g))),
   pct.n.post.ashing.bulk = c(min(hh_cue$pct.n.post.ashing.bulk), mean(hh_cue$pct.n.post.ashing.bulk), max(hh_cue$pct.n.post.ashing.bulk))
 )
@@ -339,6 +345,10 @@ plotting.data <- expand.grid(
 #predict new y values
 plotting.data$predicted.y <- predict.lm(cue.combined.model, newdata = plotting.data)
 
+#predict the upper and lower confidence bands
+plotting.data$y.min <- predict(cue.combined.model, newdata = plotting.data, interval = "confidence")[,2]
+
+plotting.data$y.max <- predict(cue.combined.model, newdata = plotting.data, interval = "confidence")[,3]
 
 #round off the pct.n values
 plotting.data$pct.n.post.ashing.bulk <- round(plotting.data$pct.n.post.ashing.bulk, digits = 5)
@@ -349,15 +359,20 @@ plotting.data$pct.n.post.ashing.bulk <- as.factor(as.character(plotting.data$pct
 #check the data
 summary(plotting.data)
 
+#make a custom color palette
+three.color <- c("red", "black", "blue")
+
 #plot the raw data
 (cue.plot <- ggplot(hh_cue, aes(x = litter.pct.c, y = CUE)) +
   geom_point())
 
 #add the regression lines
 (cue.plot <- cue.plot + 
-    geom_line(data = plotting.data, aes(x=litter.pct.c, y=predicted.y, color=pct.n.post.ashing.bulk), size=1.25))
-
-#add the formatting
+    geom_line(data = plotting.data, aes(x=litter.pct.c, y=predicted.y, color=pct.n.post.ashing.bulk), size=1.2) +
+    geom_line(data = plotting.data, aes(y=y.max, color=pct.n.post.ashing.bulk), linetype = 2) +
+    geom_line(data = plotting.data, aes(y = y.min, color = pct.n.post.ashing.bulk), linetype = 2))
+  
+#add the formula and axis labels
 (cue.plot <- cue.plot +
     theme_bw()+
     labs(title = "Microbial Carbon-Use Efficiency as a function of litter carbon, \n inorganic nitrogen and dissolved organic carbon \n in the topsoil", 
