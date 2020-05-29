@@ -1,3 +1,5 @@
+# for each row in mat converts linear predictors to ncols + 1 proportions (with sum to 1 constraint)
+
 calcProp <- function(mat){
   output <- matrix(NA, nrow = nrow(mat), ncol = ncol(mat)+1)
   for(i in 1:ncol(mat)){
