@@ -358,22 +358,32 @@ jitter <- position_jitter(width = 0.5)
 
 ```{r}
 
+# make a vector of the coefficients of model
 model.mean <- unlist(coef(c.mod5))
+
+# save the variance-covariance matrix of model fit
 model.sig <- vcov(c.mod5)
 
+# use above to simulate parameters from model (maintaining covariance structure)
 sims <- rmvnorm(1000, mean = model.mean, sigma = model.sig)
 
+#define range for main predictor (lignin-N)
 lnrange <- seq(5,25,length.out = 100)
+
+#generate an X matrix for the case of depth 0 (therefore no interaction)
 pred.matrix <- expand.grid(intercept = 1, lnratio = lnrange, depth = 0, interaction = 0)
 
+# for each set of simulated parameters, matrix multiply by the X, for each of the three components, precision is not simulated
 etas <- lapply(1:dim(sims)[1], function(x) {
   cbind(as.matrix(pred.matrix) %*% sims[x,1:4],
         as.matrix(pred.matrix) %*% sims[x,5:8],
         as.matrix(pred.matrix) %*% sims[x,9:12])
 })
 
+# bind into a 3-dimensional array = lnratio x proportion x sim
 mus <- abind(lapply(etas, calcProp), along = 3)
 
+# for each hyperrow calculate the upper and lower quantiles
 upper <- apply(mus , c(1,2), quantile, probs = 0.975)
 lower <- apply(mus , c(1,2), quantile, probs =0.025)
 
@@ -381,12 +391,13 @@ lower <- apply(mus , c(1,2), quantile, probs =0.025)
 
 
 
-# start plot with pom
+# start plot with pom in base (James' comfort zone)
 plot(orgs[,1] ~ sub.org.wide$lnratio,
      ylim = c(0,1), xlim = c(5,25),
      ylab = "Proportion",
      xlab = "lignin-N ratio")
 
+# pom
 lines(dirichlet.plot.data$lnratio[dirichlet.plot.data$fraction=="pom"&dirichlet.plot.data$depth ==1], dirichlet.plot.data$proportion[dirichlet.plot.data$fraction=="pom"&dirichlet.plot.data$depth ==1],
       lwd = 2)
 
@@ -394,6 +405,7 @@ lines(dirichlet.plot.data$lnratio[dirichlet.plot.data$fraction=="pom"&dirichlet.
 lines(lnrange, upper[,1], lty  = 2)
 lines(lnrange, lower[,1], lty  = 2)
 
+#sc
 lines(dirichlet.plot.data$lnratio[dirichlet.plot.data$fraction=="sc"&dirichlet.plot.data$depth ==1], dirichlet.plot.data$proportion[dirichlet.plot.data$fraction=="sc"&dirichlet.plot.data$depth ==1],
       lwd = 2)
 lines(lnrange, upper[,3], lty  = 2)
@@ -401,10 +413,22 @@ lines(lnrange, lower[,3], lty  = 2)
 
 # with ggplot
 
+#surely a better way is to combine it all into a longformat dataframe, here I make one data frame per proportion
 pom.quants <- data.frame(ln = lnrange,upper = upper[,1], lower = lower[,1])
+sa.quants <- data.frame(ln = lnrange,upper = upper[,2], lower = lower[,2])
+sc.quants <- data.frame(ln = lnrange,upper = upper[,3], lower = lower[,3])
 
-ggplot(data = sub.org.long, aes(y = proportion, x = lnratio)) + geom_ribbon(data =pom.quants,  aes(x = ln, y= lower, ymin = lower, ymax = upper), stat="identity", col = "blue", alpha = 0.2) + ylim(0,0.7)
- ```
+# to do, get the points plotted in a consistent colour, also both depths
+# clearly needs two LONG-format data frames. One for the actual data, one for the quantiles
+
+ggplot(data = sub.org.long, aes(y = proportion, x = lnratio)) +
+  geom_ribbon(data =pom.quants,  aes(x = ln, y= lower, ymin = lower, ymax = upper), stat="identity",fill="blue", alpha = 0.2) +
+  geom_ribbon(data =sc.quants,  aes(x = ln, y= lower, ymin = lower, ymax = upper), stat="identity",fill="green", alpha = 0.2) +
+  geom_ribbon(data =sa.quants,  aes(x = ln, y= lower, ymin = lower, ymax = upper), stat="identity",fill="orange", alpha = 0.2) +
+  (ylim(0,0.9))
+
+# for the colour mapping see here for clues: https://stackoverflow.com/questions/6919025/how-to-assign-colors-to-categorical-variables-in-ggplot2-that-have-stable-mappin
+```
 
 
 
